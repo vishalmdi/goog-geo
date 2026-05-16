@@ -2,7 +2,7 @@
 name: goog-geo
 description: "Audits any website URL for Generative Engine Optimization (GEO) based on Google's official AI optimization guide. Use when the user wants to know how AI-ready their website is, wants a GEO score, wants to optimize for Google AI Overviews, or wants to know why they're not being cited in AI search results. Scans the live URL using playwright-cli (auto-installs if needed). Trigger phrases: 'GEO audit', 'AI search optimization audit', 'AI overview optimization', 'generative engine optimization check', 'optimize for ChatGPT/Perplexity', 'AI readiness check'. For content strategy to act on audit results, see ai-seo. For traditional technical SEO, see seo-audit. For implementing schema markup fixes, see schema-markup."
 metadata:
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # GEO Audit (Generative Engine Optimization)
@@ -21,6 +21,7 @@ Before auditing, gather:
 3. **Target Queries** — What are the 3-5 queries this page should appear in AI answers for?
 4. **Current AI Visibility** — Do you currently see this site cited in Google AI Overviews, ChatGPT, or Perplexity?
 5. **Scope** — Full site audit (homepage + key pages) or a single specific URL?
+6. **Output Format** — Markdown report (default) or JSON (for programmatic use)?
 
 ---
 
@@ -47,7 +48,7 @@ playwright-cli eval "Array.from(document.querySelectorAll('script[type=\"applica
 | **Selection mechanism** | Link graph + keyword signals | Content quality, structure, extractability |
 | **Rank required?** | Yes — position matters | No — a page ranked #3 can get cited over #1 |
 | **Key signals** | Backlinks, PageRank, keywords | Semantic HTML, schema, answer blocks, authority |
-| **Crawl access** | Googlebot | Google-Extended, GPTBot, PerplexityBot, ClaudeBot |
+| **Crawl access** | Googlebot + index/snippet eligibility | Cross-platform AI crawlers tracked separately |
 | **Content format** | Keyword-optimized prose | Self-contained answer blocks, tables, FAQs |
 | **Freshness** | Helps rankings | Critical — undated content loses to dated |
 
@@ -68,19 +69,30 @@ Google's AI optimization guide explicitly debunks these — do **not** recommend
 
 ## Preflight: Browser Setup
 
-Before running the audit, verify playwright-cli is available. If the headless browser isn't installed, install it automatically.
+Before running the audit, verify playwright-cli is available.
 
 ```bash
 # Step 1: Check if playwright-cli is available
 which playwright-cli 2>/dev/null && echo "playwright-cli found globally" || \
   (npx playwright-cli --version 2>/dev/null && echo "playwright-cli available via npx") || \
   echo "playwright-cli not found"
+```
 
-# Step 2: If browsers aren't installed, install Chromium
-# (playwright-cli will error with "Executable doesn't exist" if browsers are missing)
+**If playwright-cli is found:** proceed with the full audit.
+
+**If playwright-cli is NOT found:** attempt installation:
+```bash
 npx playwright install chromium --with-deps
+```
 
-# Step 3: Confirm browser is ready
+If installation fails (non-zero exit code), **do not silently proceed**. Instead, inform the user:
+
+> playwright-cli could not be installed. Categories 2 (Content Organization), 4 (Content Quality), and 5 (Structured Data) require a live browser and will be incomplete. You can still receive a partial audit covering Category 1 (robots.txt + HTTP headers) and parts of Category 3 (meta tags via curl). Proceed with partial audit? (yes/no)
+
+If the user confirms partial audit: mark Categories 2, 4, and 5 as `N/A — browser unavailable` and score only what curl and HTTP headers can verify. **Never invent schema or DOM results when the browser is unavailable.**
+
+```bash
+# Step 3: Confirm browser is ready after successful install
 npx playwright-cli open about:blank && npx playwright-cli close
 ```
 
@@ -95,22 +107,46 @@ If `playwright-cli` runs globally, use it directly. Otherwise prefix all command
 Run these in parallel to get baseline data before opening a browser:
 
 ```bash
-# HTTP status, redirects, server headers
+# HTTP status, redirects, server headers — also parse X-Robots-Tag header
 curl -sIL "[URL]" | head -40
 
-# robots.txt — check AI crawler access
+# robots.txt — check status first, then content
+curl -sIL "https://[domain]/robots.txt" | grep -i "^HTTP/"
 curl -sL "https://[domain]/robots.txt"
 ```
 
-Parse robots.txt for these AI crawler directives:
-- `Google-Extended` — Google AI Overviews and Gemini
-- `GPTBot` — OpenAI ChatGPT
-- `ChatGPT-User` — OpenAI ChatGPT browsing
+**If robots.txt returns HTTP 200 but body starts with `<!DOCTYPE` or `<html`, treat as missing (0 pts for that check) — the host is serving a catch-all HTML error page.**
+
+**Parse `X-Robots-Tag` from the HTTP headers:** if it contains `noindex`, treat it identically to a `<meta name="robots" content="noindex">` tag (0 pts on the noindex check).
+
+```bash
+# sitemap detection — check robots.txt declaration, then fallback to default path
+grep -i "^Sitemap:" /tmp/robots_content 2>/dev/null | head -3
+curl -sIL "https://[domain]/sitemap.xml" | grep -i "^HTTP/"
+```
+
+Note the sitemap URL (or "not detected") in the Technical Note line of the report. Informational only — does not affect scoring.
+
+Parse robots.txt for crawler directives, separating Google Search AI eligibility from broader AI visibility:
+
+**Scored Google Search AI signals:**
+- `Googlebot` — Google Search crawling, including eligibility for AI Overviews and AI Mode
+- `noindex`, `nosnippet`, `max-snippet:0`, and broad `data-nosnippet` usage — index/snippet controls that can prevent Google from showing or excerpting the page
+
+**Scored cross-platform AI bots:**
+- `GPTBot` / `ChatGPT-User` — OpenAI ChatGPT
 - `PerplexityBot` — Perplexity
 - `ClaudeBot` / `anthropic-ai` — Anthropic Claude
 - `Bingbot` — Microsoft Copilot (via Bing)
 
-A `Disallow: /` rule for any of these means that platform cannot cite the site.
+**Informational bot controls — report but no separate point deduction:**
+- `Google-Extended` — an optional Google model-use directive; it does not determine Google Search AI Overview eligibility
+- `Gemini-Bot` — Google's standalone Gemini crawler
+- `Meta-ExternalAgent` — Meta AI
+- `Applebot-Extended` — Apple Intelligence
+- `cohere-ai` — Cohere Command
+
+A `Disallow: /` rule for any scored cross-platform bot means that platform's crawler may not access the site. Report blocked informational bots in the Technical Note section.
 
 ### Step 2 — Open Page in Browser
 
@@ -133,13 +169,13 @@ playwright-cli run-code "async page => { return await page.evaluate(() => Array.
 playwright-cli run-code "async page => { return await page.evaluate(() => Array.from(document.querySelectorAll('script[type=\"application/ld+json\"]')).map(s=>s.textContent)) }"
 
 # 3c. Meta tags (title, description, canonical, robots, OG)
-playwright-cli run-code "async page => { return await page.evaluate(() => ({title:document.title,titleLen:document.title.length,metaDesc:document.querySelector('meta[name=description]')?.content,canonical:document.querySelector('link[rel=canonical]')?.href,metaRobots:document.querySelector('meta[name=robots]')?.content,ogTitle:document.querySelector('meta[property=\"og:title\"]')?.content,ogDesc:document.querySelector('meta[property=\"og:description\"]')?.content,ogImage:document.querySelector('meta[property=\"og:image\"]')?.content})) }"
+playwright-cli run-code "async page => { return await page.evaluate(() => ({title:document.title,titleLen:document.title.length,metaDesc:document.querySelector('meta[name=description]')?.content,canonical:document.querySelector('link[rel=canonical]')?.href,metaRobots:document.querySelector('meta[name=robots]')?.content,maxSnippet:/max-snippet:\s*(-?\d+)/.exec(document.querySelector('meta[name=robots]')?.content||'')?.[1],ogTitle:document.querySelector('meta[property=\"og:title\"]')?.content,ogDesc:document.querySelector('meta[property=\"og:description\"]')?.content,ogImage:document.querySelector('meta[property=\"og:image\"]')?.content})) }"
 
-# 3d. Semantic HTML and content signals
-playwright-cli run-code "async page => { return await page.evaluate(() => ({hasMain:!!document.querySelector('main'),hasArticle:!!document.querySelector('article'),hasSection:!!document.querySelector('section'),hasNav:!!document.querySelector('nav'),hasAuthor:!!(document.querySelector('[rel=author],[class*=author],[itemprop=author],[data-author]')),hasDate:!!(document.querySelector('time,[class*=date],[class*=published],[itemprop=datePublished],[class*=updated]')),imgsMissingAlt:document.querySelectorAll('img:not([alt])').length,totalImgs:document.querySelectorAll('img').length,ariaLabelCount:document.querySelectorAll('[aria-label],[aria-labelledby]').length,interactiveWithoutLabel:document.querySelectorAll('button:not([aria-label]):not([title]),a:not([aria-label]):not([title]):not([href])').length})) }"
+# 3d. Semantic HTML, content signals, and E-E-A-T trust page detection
+playwright-cli run-code "async page => { return await page.evaluate(() => ({hasMain:!!document.querySelector('main'),hasArticle:!!document.querySelector('article'),hasSection:!!document.querySelector('section'),hasNav:!!document.querySelector('nav'),hasAuthor:!!(document.querySelector('[rel=author],[class*=author],[itemprop=author],[data-author]')),hasDate:!!(document.querySelector('time,[class*=date],[class*=published],[itemprop=datePublished],[class*=updated]')),imgsMissingAlt:document.querySelectorAll('img:not([alt])').length,totalImgs:document.querySelectorAll('img').length,ariaLabelCount:document.querySelectorAll('[aria-label],[aria-labelledby]').length,interactiveWithoutLabel:document.querySelectorAll('button:not([aria-label]):not([title]),a:not([aria-label]):not([title]):not([href])').length,hasAbout:Array.from(document.querySelectorAll('a[href]')).some(a=>/\/(about|about-us|who-we-are)(\/|$)/i.test(a.pathname)),hasContact:Array.from(document.querySelectorAll('a[href]')).some(a=>/\/(contact|contact-us|get-in-touch)(\/|$)/i.test(a.pathname))})) }"
 
-# 3e. Content quality signals — FAQ, stats, citations, answer blocks
-playwright-cli run-code "async page => { return await page.evaluate(() => ({hasFAQ:!!(document.querySelector('[class*=faq],[id*=faq],details,dt')||/(?:frequently asked|faq|q&a)/i.test(document.body.innerText.substring(0,5000))),hasOrderedList:!!document.querySelector('ol'),hasTable:!!document.querySelector('table'),firstParaWords:(document.querySelector('main p,article p,p')?.innerText?.trim()?.split(/\s+/)?.length||0),externalLinks:Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname!==location.hostname&&a.hostname).length,hasStats:/\d+[\.\,]?\d*\s*(%|percent|users|customers|companies|studies|million|billion)/i.test(document.body.innerText.substring(0,8000))})) }"
+# 3e. Content quality signals — FAQ, stats, citations, answer blocks, internal links
+playwright-cli run-code "async page => { return await page.evaluate(() => ({hasFAQ:!!(document.querySelector('[class*=faq],[id*=faq],details,dt')||/(?:frequently asked|faq|q&a)/i.test(document.body.innerText.substring(0,5000))),hasOrderedList:!!document.querySelector('ol'),hasTable:!!document.querySelector('table'),firstParaWords:(document.querySelector('main p,article p,p')?.innerText?.trim()?.split(/\s+/)?.length||0),externalLinks:Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname!==location.hostname&&a.hostname).length,internalLinks:Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname===location.hostname||a.getAttribute('href')?.startsWith('/')).length,hasStats:/\d+[\.\,]?\d*\s*(%|percent|users|customers|companies|studies|million|billion)/i.test(document.body.innerText.substring(0,8000))})) }"
 
 playwright-cli close
 ```
@@ -147,6 +183,8 @@ playwright-cli close
 ### Step 4 — Score Each Category
 
 Use the extracted data to score all five categories. Reference [references/scoring-rubric.md](references/scoring-rubric.md) for detailed per-check criteria and partial scoring rules.
+
+When scoring is complete, identify the **three failed checks with the highest point values** for the Top 3 callout in the report. Break ties by preferring Category 1 (Google Search and AI Bot Accessibility), then Category 4 (Content Quality), then Category 5 (Structured Data).
 
 ### Step 5 — Generate Report
 
@@ -158,19 +196,24 @@ Produce the full audit report (see Output Format below).
 
 **100 points total across 5 categories (20 pts each).**
 
-### Category 1: AI Bot Accessibility (20 pts)
+### Category 1: Google Search & AI Bot Accessibility (20 pts)
 
 | Check | Points |
 |-------|-------:|
-| robots.txt is accessible (HTTP 200) | 2 |
-| Googlebot not blocked | 2 |
-| Google-Extended not blocked (controls AI Overviews) | 4 |
+| robots.txt is accessible (HTTP 200, non-HTML body) | 2 |
+| Googlebot not blocked (Google Search AI crawl eligibility) | 4 |
+| No `noindex` signal (meta tag or `X-Robots-Tag` header) | 3 |
+| No snippet-blocking signal (`nosnippet`, `max-snippet:0`, or broad `data-nosnippet`) | 3 |
 | GPTBot / ChatGPT-User not blocked | 3 |
-| PerplexityBot not blocked | 3 |
-| ClaudeBot / anthropic-ai not blocked | 3 |
-| No `noindex` meta tag blocking all crawlers | 3 |
+| PerplexityBot not blocked | 2 |
+| ClaudeBot / anthropic-ai not blocked | 2 |
+| Bingbot not blocked | 1 |
 
-> Google-Extended is weighted highest (4 pts) because blocking it disables Google AI Overviews, the most widely used AI search surface.
+> Google AI Overviews and AI Mode are governed by normal Google Search controls: Googlebot access, indexability, and snippet eligibility.
+>
+> **Informational:** If `Crawl-delay > 10` is detected for any non-Google AI bot, report it as a potential cross-platform crawl friction issue. Do not deduct points for Google Search AI eligibility because Google does not support `Crawl-delay` in robots.txt.
+>
+> **Informational bots** (`Google-Extended`, `Gemini-Bot`, `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai`): report if blocked in the Technical Note, no separate point deduction.
 
 ### Category 2: Content Organization (20 pts)
 
@@ -244,11 +287,21 @@ Audited: [YYYY-MM-DD]
 ### Score Breakdown
 | Category                   | Score  |
 |----------------------------|-------:|
-| AI Bot Accessibility       | XX/20  |
+| Google Search & AI Bot Access | XX/20 |
 | Content Organization       | XX/20  |
 | Semantic HTML & Technical  | XX/20  |
 | Content Quality Signals    | XX/20  |
 | Structured Data (Schema)   | XX/20  |
+
+> **Technical Note:** sitemap.xml [found at X / not detected] | About page [linked / not found] | Contact page [linked / not found]
+
+---
+
+### Top 3 Highest-Impact Fixes
+> Fix these before anything else — they account for the majority of your score gap.
+1. [highest-point failed check] — [one-line rationale + estimated point gain]
+2. [second highest] — [same]
+3. [third highest] — [same]
 
 ---
 
@@ -260,9 +313,14 @@ Audited: [YYYY-MM-DD]
 ### ❌ Failed Checks — Highest Impact First
 | Issue | Category | Impact | Recommended Fix |
 |-------|----------|:------:|----------------|
-| Google-Extended blocked in robots.txt | AI Bot Access | HIGH | Remove the Disallow rule for Google-Extended |
-| No JSON-LD schema detected | Structured Data | HIGH | Add Article + FAQPage schema via JSON-LD |
+| Googlebot blocked in robots.txt | AI Bot Access | HIGH | Remove the Disallow rule for Googlebot so the page can be crawled for Search and AI features |
+| No JSON-LD schema detected | Structured Data | MEDIUM | Add relevant standard schema.org JSON-LD to clarify entities and support rich results |
 | ...   | ...      | ...    | ...            |
+
+**Supplemental flags (informational — not scored):**
+- If `internalLinks < 3`: add row `Thin internal link structure (< 3 internal links) | Content Quality | MEDIUM | Add contextual links to related pages`
+- If `hasAbout` and `hasContact` are both false: add row `No About or Contact page detected | Trust Signals | MEDIUM | Add visible company/contact information to help users and quality evaluators understand who is behind the site`
+- If any informational bot (`Google-Extended`, `Gemini-Bot`, `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai`) is blocked: note in Technical Note section
 
 ---
 
@@ -286,12 +344,44 @@ Audited: [YYYY-MM-DD]
 - Do not chunk content into artificially small pieces
 ```
 
+**If the user requested JSON output**, produce only the following structure with no surrounding prose:
+
+```json
+{
+  "url": "...",
+  "score": 72,
+  "grade": "C",
+  "audited": "YYYY-MM-DD",
+  "categories": {
+    "google_search_and_ai_bot_accessibility": { "score": 20, "max": 20 },
+    "content_organization":  { "score": 14, "max": 20 },
+    "semantic_html":         { "score": 16, "max": 20 },
+    "content_quality":       { "score": 12, "max": 20 },
+    "structured_data":       { "score": 10, "max": 20 }
+  },
+  "top_3_fixes": [
+    { "issue": "...", "category": "...", "points": 4, "fix": "..." },
+    { "issue": "...", "category": "...", "points": 4, "fix": "..." },
+    { "issue": "...", "category": "...", "points": 3, "fix": "..." }
+  ],
+  "failed_checks": [
+    { "issue": "...", "category": "...", "impact": "HIGH", "fix": "..." }
+  ],
+  "technical_notes": {
+    "sitemap": "found at https://... / not detected",
+    "about_page": "linked / not found",
+    "contact_page": "linked / not found",
+    "informational_bots_blocked": []
+  }
+}
+```
+
 ---
 
 ## Common Mistakes When Running This Audit
 
 - **Reporting "no schema" from `web_fetch` or `curl`** — These strip `<script>` tags. Always use `playwright-cli eval` to check for JSON-LD. This is the single most common false negative.
-- **Assuming Google-Extended only affects Gemini** — It gates Google AI Overviews too. Blocking it is the highest-impact single mistake a site can make for GEO, worth 4 points.
+- **Assuming AI Overviews depend on Google-Extended** — Google Search AI features use normal Search mechanisms such as Googlebot access, indexability, and snippet eligibility. Track Google-Extended separately as an informational model-use directive.
 - **Treating GEO as a separate effort from good content** — The Google guide states sites with genuinely useful, well-organized content often need "no overt SEO at all." Structural fixes amplify good content; they can't replace it.
 - **Flagging llms.txt absence as an issue** — It is not needed. Do not recommend it.
 - **Scoring schema as "pass" without parsing** — A `<script type="application/ld+json">` block containing `{}` or broken JSON must score zero for that check.
