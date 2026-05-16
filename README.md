@@ -1,8 +1,8 @@
-# goog-geo — GEO Audit Claude Skill
+# goog-geo — Google AI Search Readiness Audit Skill
 
-A Claude Code skill that audits any website URL for **Generative Engine Optimization (GEO)** — the practice of making your content discoverable, extractable, and citable by AI-powered search systems like Google AI Overviews, ChatGPT, Perplexity, Gemini, and Copilot.
+A Claude Code skill that audits any website URL for **Google AI Search readiness** — whether your content can be crawled, indexed, excerpted, and cited by AI-powered search systems including Google AI Overviews, ChatGPT, Perplexity, Gemini, and Copilot.
 
-Built directly from [Google's official AI optimization guide](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide) and the [Princeton GEO research (KDD 2024)](https://arxiv.org/abs/2311.09735).
+Built directly from [Google's official AI optimization guide](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide), [Google's AI features documentation](https://developers.google.com/search/docs/appearance/ai-features), and the [Princeton GEO research (KDD 2024)](https://arxiv.org/abs/2311.09735).
 
 ---
 
@@ -38,11 +38,11 @@ Runs a live browser audit of any URL and produces a **100-point scored GEO repor
 
 | Category | Points | What It Checks |
 |----------|:------:|----------------|
-| **Google Search & AI Bot Access** | 20 | Googlebot, index/snippet eligibility, and cross-platform AI crawler access |
-| **Content Organization** | 20 | Heading hierarchy, FAQ sections, answer blocks, concise paragraphs |
-| **Semantic HTML & Technical** | 20 | `<main>`, `<article>`, title length, canonical, alt text, ARIA, Open Graph |
-| **Content Quality Signals** | 20 | Author attribution, dates, statistics, external citations, answer blocks |
-| **Structured Data / Schema** | 20 | JSON-LD presence, Organization/Article/FAQPage schema, BreadcrumbList |
+| **Google Search AI Eligibility** | 25 | Googlebot access, HTTP 200, noindex/nosnippet signals, canonical — the three hard gates for Google AI features |
+| **Helpful Non-Commodity Content** | 25 | First-hand expertise, intent satisfaction, depth beyond commodity, AI content quality — scored by auditor judgment |
+| **Content Organization & Extractability** | 20 | Heading hierarchy, direct answer block, FAQ sections, internal links, query fan-out coverage |
+| **Technical Structure & Page Experience** | 15 | `<main>`, `<article>`, title/description, alt text, ARIA, Open Graph |
+| **Entity & Enhancement Signals** | 15 | JSON-LD schema, author, publication date, statistics, cross-platform AI bot access |
 
 ### Grade Scale
 
@@ -69,15 +69,25 @@ Runs a live browser audit of any URL and produces a **100-point scored GEO repor
 # 1. Clone the repo into your skills directory
 git clone https://github.com/vishalmdi/goog-geo ~/.agents/skills/goog-geo
 
-# 2. Register it with Claude Code
+# 2. Install dependencies (required for scripts/audit.mjs)
+cd ~/.agents/skills/goog-geo && npm install
+
+# 3. Register it with Claude Code
 ln -s ../../.agents/skills/goog-geo ~/.claude/skills/goog-geo
 ```
 
-> **Already have `~/.agents/skills/` set up?** Just run step 1 — the symlink structure in step 2 matches how all skills are registered with Claude Code.
+> **Already have `~/.agents/skills/` set up?** Just run steps 1 and 2 — the symlink structure in step 3 matches how all skills are registered with Claude Code.
 
 ### First-Time Browser Setup
 
-The skill uses a headless Chromium browser to inspect the live rendered DOM. On first run it will auto-install if needed, but you can also do it manually:
+The skill uses a headless Chromium browser to inspect the live rendered DOM. Install it via npm:
+
+```bash
+cd ~/.agents/skills/goog-geo
+npm run install-browser
+```
+
+Or manually:
 
 ```bash
 npx playwright install chromium --with-deps
@@ -109,33 +119,42 @@ Claude will then:
 ### Example Output
 
 ```
-## GEO Audit: https://example.com
+## Google AI Search Readiness Audit: https://example.com
 **Overall Score: 72/100** — Grade: C
 Audited: 2026-05-16
 
+### Google AI Search Eligibility: ELIGIBLE
+- Googlebot: allowed
+- Indexing: allowed
+- Snippets: allowed (no blocking directives)
+
 ### Score Breakdown
-| Category                   | Score  |
-|----------------------------|-------:|
-| Google Search & AI Bot Access | 20/20 |
-| Content Organization       | 14/20  |
-| Semantic HTML & Technical  | 16/20  |
-| Content Quality Signals    | 12/20  |
-| Structured Data (Schema)   | 10/20  |
+| Category                              | Score  |
+|---------------------------------------|-------:|
+| Google Search AI Eligibility          | 25/25  |
+| Helpful Non-Commodity Content         | 14/25  |
+| Content Organization & Extractability | 14/20  |
+| Technical Structure & Page Experience | 11/15  |
+| Entity & Enhancement Signals          |  8/15  |
 
 ### ✅ Passing Checks
-- All AI crawlers allowed in robots.txt
+- Googlebot not blocked in robots.txt
+- Page returns HTTP 200
+- No noindex or nosnippet directives
 - Single H1 present and matches page intent
 ...
 
 ### ❌ Failed Checks — Highest Impact First
 | Issue | Category | Impact | Recommended Fix |
 |-------|----------|:------:|----------------|
-| No JSON-LD schema detected | Structured Data | MEDIUM | Add relevant standard schema.org JSON-LD |
+| Content lacks first-hand expertise signals | Helpful Content | HIGH | Add named author with credentials; include original examples or data |
+| No JSON-LD schema detected | Entity Signals | MEDIUM | Add Article + FAQPage schema via JSON-LD |
 ...
 
 ### Quick Wins (≤ 30 min)
-1. Fix page title length (currently 12 chars — expand to 50–60)
-2. Add relevant standard schema.org JSON-LD
+1. Add named author attribution with credentials
+2. Add publication and last-updated dates
+3. Add JSON-LD Article schema
 ```
 
 ---
@@ -157,16 +176,21 @@ Google's AI optimization guide explicitly debunks these. The skill flags them an
 
 ## How This Was Built
 
-### Inspired by Google's Official Guide
+### Grounded in Google's Official Guide
 
-This skill was built from the ground up using [Google's AI optimization guide](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide) as the primary source of truth. The guide makes a clear and important point: **the same foundational signals that make content rank well in traditional search also make it citable in AI search** — with a few additional considerations around content extractability and entity structure.
+This skill was built from Google's official documentation as the primary source of truth. A key principle from the guide: **the same foundational signals that make content rank well in traditional search also make it citable in AI search.** There is no separate technical path.
 
-The key insight from the guide is that Google's AI Overviews use the same core ranking systems as traditional Search (including RAG — Retrieval-Augmented Generation), but content selection for AI answers skews further toward:
+Google's AI Overviews and AI Mode use the same crawl, indexing, and ranking systems as traditional Search — with RAG (Retrieval-Augmented Generation) applied on top. The eligibility gates are:
 
-1. **Structured, extractable content** — answer blocks, tables, and FAQs that AI can pull as self-contained passages
-2. **Semantic clarity** — semantic HTML (`<main>`, `<article>`, proper heading hierarchy) that helps AI systems identify what the main content actually is
-3. **Entity recognition** — structured data (JSON-LD schema) that tells AI systems exactly what a page is about, who wrote it, and when
-4. **Crawler access** — Googlebot/index/snippet eligibility for Google Search AI features, plus cross-platform crawlers like `GPTBot`, `PerplexityBot`, `ClaudeBot`, and `Bingbot`
+1. **Googlebot access** — the only bot that matters for Google AI features; blocking it blocks all Google AI citation
+2. **Indexability** — no `noindex` in meta tags or `X-Robots-Tag` HTTP headers
+3. **Snippet eligibility** — no `nosnippet` or `max-snippet:0`; AI Overviews work by excerpting content
+
+Beyond eligibility, content selection skews toward:
+
+4. **Unique, people-first content** — genuinely helpful, non-commodity; "success often requires no overt SEO at all"
+5. **Structured, extractable content** — answer blocks, tables, FAQs that AI can pull as self-contained passages
+6. **Entity recognition** — schema, author attribution, and dates that help AI systems understand what a page is, who wrote it, and when
 
 ### The Princeton GEO Research
 
@@ -190,14 +214,16 @@ The skill uses **`playwright-cli`** (the headless browser CLI bundled with Playw
 
 - `curl` and `web_fetch` strip `<script>` tags, making them unable to detect JSON-LD schema injected by CMS plugins (Yoast, RankMath, AIOSEO)
 - `playwright-cli` loads the full page in a real browser, exposing the complete accessibility tree — which is also what browser-based AI agents see when navigating your site
-- Complex DOM extractions use `playwright-cli run-code` (not `eval`) for multi-value object/array returns
+
+For automated data collection, the skill also ships `scripts/audit.mjs` — a deterministic Node.js script using the Playwright Node API that collects all DOM signals in a single browser session and outputs JSON. Claude then interprets the JSON and applies the scoring rubric.
 
 ### Scoring Design
 
-The 5-category / 100-point framework was designed to:
-- Weight **Googlebot access, indexability, and snippet eligibility** heavily, since these can prevent Google from crawling, indexing, or excerpting the page; treat structured data as an entity clarity and rich-results enhancer rather than a hard AI visibility blocker
-- Treat **N/A checks** generously (FAQPage and HowTo schema are auto-awarded if the content type doesn't apply, avoiding penalizing pages for not having content types they don't need)
-- Keep partial scoring possible at every check, since most real-world pages are somewhere in the middle
+The 5-category / 100-point framework (25/25/20/15/15) was designed to:
+- **Weight the three hard gates highest** (Category 1, 25 pts): Googlebot access, noindex, and nosnippet together can completely prevent Google AI citation; they are weighted accordingly
+- **Weight helpful content second** (Category 2, 25 pts): Google explicitly identifies unique, people-first content as the highest-leverage factor; this category requires auditor judgment, not DOM extraction
+- **Treat schema as an enhancement, not a gate**: Schema supports rich results and entity clarity but is not required for AI Overviews; framing it as a blocker would be factually incorrect
+- **Keep partial scoring at every check**: most real-world pages are somewhere in the middle
 
 ---
 
@@ -219,9 +245,13 @@ If you're using Claude Code with the full skill ecosystem:
 
 ```
 goog-geo/
-├── SKILL.md                    # Main skill — loaded by Claude Code
+├── SKILL.md                                    # Main skill — loaded by Claude Code
+├── package.json                                # Playwright dependency declaration
+├── scripts/
+│   └── audit.mjs                               # Deterministic data-collection script (outputs JSON)
 └── references/
-    └── scoring-rubric.md       # Detailed per-check scoring criteria and edge cases
+    ├── scoring-rubric.md                       # Detailed per-check scoring criteria and edge cases
+    └── google-ai-search-principles.md          # Official guide summary — truth source for scoring
 ```
 
 ---
@@ -240,6 +270,7 @@ goog-geo/
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.0.0 | 2026-05-16 | Repositioned as Google AI Search readiness auditor; corrected factual error (Google-Extended does not gate AI Overviews — Googlebot + noindex/nosnippet do); new 25/25/20/15/15 scoring model reflecting actual Google AI eligibility hierarchy; Category 2 adds qualitative helpful-content judgment; Category 3 adds query fan-out coverage; new `scripts/audit.mjs` for deterministic data collection; new `references/google-ai-search-principles.md` as truth source; eligibility verdict added to report header (ELIGIBLE / AT RISK / BLOCKED / UNKNOWN); schema reframed as enhancement signal, not requirement |
 | 1.1.0 | 2026-05-16 | Corrected Google Search AI readiness scoring around Googlebot, indexability, and snippets; added informational bot notes for Google-Extended, Gemini-Bot, Meta-ExternalAgent, Applebot-Extended, and cohere-ai; added robots.txt HTML-body false-positive handling, X-Robots-Tag checks, max-snippet scoring, Top 3 Highest-Impact Fixes, sitemap detection, internal link and trust-page flags, JSON output mode, and preflight fallback warning |
 | 1.0.0 | 2026-05-16 | Initial release |
 

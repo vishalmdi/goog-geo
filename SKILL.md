@@ -1,13 +1,17 @@
 ---
 name: goog-geo
-description: "Audits any website URL for Generative Engine Optimization (GEO) based on Google's official AI optimization guide. Use when the user wants to know how AI-ready their website is, wants a GEO score, wants to optimize for Google AI Overviews, or wants to know why they're not being cited in AI search results. Scans the live URL using playwright-cli (auto-installs if needed). Trigger phrases: 'GEO audit', 'AI search optimization audit', 'AI overview optimization', 'generative engine optimization check', 'optimize for ChatGPT/Perplexity', 'AI readiness check'. For content strategy to act on audit results, see ai-seo. For traditional technical SEO, see seo-audit. For implementing schema markup fixes, see schema-markup."
+description: "Audits any website URL for Google AI Search readiness based on Google's official AI optimization guide. Use when the user wants to know if their page is eligible for Google AI Overviews or AI Mode, wants a GEO score, wants to optimize for AI-powered search, or wants to know why they're not being cited in AI search results. Scans the live URL using playwright-cli (auto-installs if needed). Trigger phrases: 'GEO audit', 'AI search optimization audit', 'AI overview optimization', 'generative engine optimization check', 'optimize for ChatGPT/Perplexity', 'AI readiness check'. For content strategy to act on audit results, see ai-seo. For traditional technical SEO, see seo-audit. For implementing schema markup fixes, see schema-markup."
 metadata:
-  version: 1.1.0
+  version: 2.0.0
 ---
 
-# GEO Audit (Generative Engine Optimization)
+# Google AI Search Readiness Audit
 
-You are an expert in Generative Engine Optimization — the practice of making web content discoverable, extractable, and citable by AI-powered search systems including Google AI Overviews, ChatGPT, Perplexity, Gemini, and Copilot. Your goal is to audit a live URL against Google's official AI optimization guide and produce a scored, actionable report.
+You are an expert in Google AI Search readiness — the practice of making web content eligible for, discoverable by, and extractable by AI-powered search systems. Your primary reference is Google's official AI optimization guide and AI features documentation. Your goal is to audit a live URL and produce a scored, actionable report grounded in what Google actually says matters — not SEO blog conjecture.
+
+**Before you start:** Read `references/google-ai-search-principles.md` for the canonical summary of Google's official guidance. This document is the truth source that prevents score regression.
+
+---
 
 ## Initial Assessment
 
@@ -40,30 +44,30 @@ playwright-cli eval "Array.from(document.querySelectorAll('script[type=\"applica
 
 ---
 
-## GEO vs. Traditional SEO
+## Google AI Search vs. Traditional SEO
 
-| Dimension | Traditional SEO | Generative Engine Optimization |
-|-----------|----------------|-------------------------------|
+| Dimension | Traditional SEO | Google AI Search (AI Overviews / AI Mode) |
+|-----------|----------------|------------------------------------------|
 | **Goal** | Rank on page 1 | Get cited in AI-generated answers |
-| **Selection mechanism** | Link graph + keyword signals | Content quality, structure, extractability |
-| **Rank required?** | Yes — position matters | No — a page ranked #3 can get cited over #1 |
-| **Key signals** | Backlinks, PageRank, keywords | Semantic HTML, schema, answer blocks, authority |
-| **Crawl access** | Googlebot + index/snippet eligibility | Cross-platform AI crawlers tracked separately |
-| **Content format** | Keyword-optimized prose | Self-contained answer blocks, tables, FAQs |
+| **Selection mechanism** | Link graph + keyword signals | Content quality, extractability, and the same core ranking systems as Search |
+| **Rank required?** | Yes — position matters | No — but Google Search ranking signals still apply |
+| **Hard eligibility gates** | Googlebot access, indexability | Same: Googlebot access, no `noindex`, snippet eligibility |
+| **Crawl access** | Googlebot | Googlebot (Google AI features); cross-platform bots for other AI systems |
+| **Content format** | Keyword-optimized prose | People-first, non-commodity, extractable answers |
 | **Freshness** | Helps rankings | Critical — undated content loses to dated |
 
 ---
 
-## What GEO Is NOT (Myths from Google's Official Guide)
+## What Does NOT Work (Myths from Google's Official Guide)
 
 Google's AI optimization guide explicitly debunks these — do **not** recommend them:
 
 - **llms.txt files** — Google states these have no effect on AI search
-- **Special AI-targeted schema** — standard schema.org types are what matter
+- **Special AI-targeted schema** — standard schema.org types are what matter; schema is not required for AI Overviews
 - **Chunking content into small pieces** — write for humans, not AI ingestion pipelines
 - **Rewriting content specifically for AI** — "Success often requires no overt SEO at all"
 - **Inauthentic citations or mentions** — manipulation is detected and penalized
-- **Long-tail keyword obsession** — AI systems use semantic understanding, not keyword matching
+- **`Google-Extended` as an AI Overviews gate** — `Google-Extended` is a model-use directive, not an AI Overviews control; `Googlebot` + `noindex`/`nosnippet` are the real gates
 
 ---
 
@@ -87,12 +91,12 @@ npx playwright install chromium --with-deps
 
 If installation fails (non-zero exit code), **do not silently proceed**. Instead, inform the user:
 
-> playwright-cli could not be installed. Categories 2 (Content Organization), 4 (Content Quality), and 5 (Structured Data) require a live browser and will be incomplete. You can still receive a partial audit covering Category 1 (robots.txt + HTTP headers) and parts of Category 3 (meta tags via curl). Proceed with partial audit? (yes/no)
+> playwright-cli could not be installed. Categories 2 (Helpful Content), 3 (Organization & Extractability), 4 (Technical Structure), and 5 (Entity Signals) require a live browser and will be incomplete. You can still receive a partial audit covering Category 1 (Google Search AI Eligibility via robots.txt and HTTP headers). Proceed with partial audit? (yes/no)
 
-If the user confirms partial audit: mark Categories 2, 4, and 5 as `N/A — browser unavailable` and score only what curl and HTTP headers can verify. **Never invent schema or DOM results when the browser is unavailable.**
+If the user confirms partial audit: mark Categories 2–5 as `N/A — browser unavailable` and score only what curl and HTTP headers can verify. **Never invent schema or DOM results when the browser is unavailable.**
 
 ```bash
-# Step 3: Confirm browser is ready after successful install
+# Confirm browser is ready after successful install
 npx playwright-cli open about:blank && npx playwright-cli close
 ```
 
@@ -127,26 +131,23 @@ curl -sIL "https://[domain]/sitemap.xml" | grep -i "^HTTP/"
 
 Note the sitemap URL (or "not detected") in the Technical Note line of the report. Informational only — does not affect scoring.
 
-Parse robots.txt for crawler directives, separating Google Search AI eligibility from broader AI visibility:
+Parse robots.txt for crawler directives:
 
-**Scored Google Search AI signals:**
+**Scored Google Search AI signals (Category 1):**
 - `Googlebot` — Google Search crawling, including eligibility for AI Overviews and AI Mode
-- `noindex`, `nosnippet`, `max-snippet:0`, and broad `data-nosnippet` usage — index/snippet controls that can prevent Google from showing or excerpting the page
+- `noindex`, `nosnippet`, `max-snippet:0`, and broad `data-nosnippet` usage — index/snippet controls
 
-**Scored cross-platform AI bots:**
+**Scored cross-platform AI bots (Category 5):**
 - `GPTBot` / `ChatGPT-User` — OpenAI ChatGPT
 - `PerplexityBot` — Perplexity
 - `ClaudeBot` / `anthropic-ai` — Anthropic Claude
 - `Bingbot` — Microsoft Copilot (via Bing)
 
-**Informational bot controls — report but no separate point deduction:**
-- `Google-Extended` — an optional Google model-use directive; it does not determine Google Search AI Overview eligibility
-- `Gemini-Bot` — Google's standalone Gemini crawler
-- `Meta-ExternalAgent` — Meta AI
-- `Applebot-Extended` — Apple Intelligence
-- `cohere-ai` — Cohere Command
+**Informational bot controls — report in Technical Note, no point deduction:**
+- `Google-Extended` — model-use directive; does NOT control Google AI Overviews eligibility
+- `Gemini-Bot`, `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai`
 
-A `Disallow: /` rule for any scored cross-platform bot means that platform's crawler may not access the site. Report blocked informational bots in the Technical Note section.
+A `Disallow: /` rule for any scored cross-platform bot means that platform's crawler may not access the site.
 
 ### Step 2 — Open Page in Browser
 
@@ -155,7 +156,13 @@ playwright-cli open "[URL]"
 playwright-cli snapshot
 ```
 
-The snapshot gives you the full accessibility tree — this is what browser-based AI agents (agentic AI experiences) see when they navigate the page.
+The snapshot gives you the full accessibility tree — this is what browser-based AI agents see when they navigate the page. Also read the first 800 words of visible text from the snapshot for Step 3.5.
+
+### Step 2.5 — Query Fan-Out Analysis
+
+Based on the target queries from Initial Assessment, generate the likely sub-queries Google would expand to via query fan-out. For example, "best CRM software" fans out to "CRM pricing comparison," "CRM for small business," "CRM integrations with email," "CRM vs spreadsheet," etc.
+
+List 6–10 expected sub-queries, then check whether each sub-topic appears naturally in the page headings or body text (from the snapshot). Record which are present and absent. This feeds directly into Category 3 scoring and the Action Plan.
 
 ### Step 3 — Extract DOM Signals
 
@@ -180,11 +187,22 @@ playwright-cli run-code "async page => { return await page.evaluate(() => ({hasF
 playwright-cli close
 ```
 
+### Step 3.5 — Evaluate Content Quality (Category 2)
+
+Read the first 800 words of visible text from the playwright snapshot. Score Category 2 by applying these four questions:
+
+1. Does this content reflect first-hand experience, original research, or expert judgment — or is it a rewrite of what any generic summary would say?
+2. After reading this page, would a visitor have their question fully answered, or would they need to search again?
+3. Does the content include specific details (exact numbers, named examples, direct quotes, or author opinions) that could only come from direct knowledge?
+4. If AI-generated content is present, is it clearly useful and original — or does it add length without adding value?
+
+Note your evidence for each question (quote or paraphrase). Score conservatively — if evidence is mixed, apply the lower tier. Consult the user if the content type is ambiguous (e.g., an "About" page vs. a product comparison page).
+
 ### Step 4 — Score Each Category
 
-Use the extracted data to score all five categories. Reference [references/scoring-rubric.md](references/scoring-rubric.md) for detailed per-check criteria and partial scoring rules.
+Use the extracted data and content evaluation to score all five categories. Reference [references/scoring-rubric.md](references/scoring-rubric.md) for detailed per-check criteria and partial scoring rules.
 
-When scoring is complete, identify the **three failed checks with the highest point values** for the Top 3 callout in the report. Break ties by preferring Category 1 (Google Search and AI Bot Accessibility), then Category 4 (Content Quality), then Category 5 (Structured Data).
+When scoring is complete, identify the **three failed checks with the highest point values** for the Top 3 callout in the report. Break ties by preferring Category 1 (eligibility blockers first — any Googlebot block or noindex/nosnippet outweighs everything else), then Category 2 (content quality).
 
 ### Step 5 — Generate Report
 
@@ -194,74 +212,72 @@ Produce the full audit report (see Output Format below).
 
 ## Scoring Framework
 
-**100 points total across 5 categories (20 pts each).**
+**100 points total across 5 categories.**
 
-### Category 1: Google Search & AI Bot Accessibility (20 pts)
+### Category 1: Google Search AI Eligibility (25 pts)
 
-| Check | Points |
-|-------|-------:|
-| robots.txt is accessible (HTTP 200, non-HTML body) | 2 |
-| Googlebot not blocked (Google Search AI crawl eligibility) | 4 |
-| No `noindex` signal (meta tag or `X-Robots-Tag` header) | 3 |
-| No snippet-blocking signal (`nosnippet`, `max-snippet:0`, or broad `data-nosnippet`) | 3 |
-| GPTBot / ChatGPT-User not blocked | 3 |
-| PerplexityBot not blocked | 2 |
-| ClaudeBot / anthropic-ai not blocked | 2 |
-| Bingbot not blocked | 1 |
-
-> Google AI Overviews and AI Mode are governed by normal Google Search controls: Googlebot access, indexability, and snippet eligibility.
->
-> **Informational:** If `Crawl-delay > 10` is detected for any non-Google AI bot, report it as a potential cross-platform crawl friction issue. Do not deduct points for Google Search AI eligibility because Google does not support `Crawl-delay` in robots.txt.
->
-> **Informational bots** (`Google-Extended`, `Gemini-Bot`, `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai`): report if blocked in the Technical Note, no separate point deduction.
-
-### Category 2: Content Organization (20 pts)
+These are the hard gates. A page blocked to Googlebot or marked `noindex` cannot appear in AI Overviews regardless of content quality.
 
 | Check | Points |
 |-------|-------:|
-| Exactly one H1 on the page | 3 |
-| Logical heading hierarchy (H1 → H2 → H3, no skipped levels) | 3 |
-| H1 text reflects the apparent page intent / query target | 3 |
-| FAQ, Q&A, or `<details>` section present | 3 |
-| Tables or ordered lists used for structured content | 3 |
-| Direct answer / definition appears in the first visible paragraph | 3 |
-| Paragraphs appear concise (first paragraph ≤ 120 words) | 2 |
+| Googlebot not blocked in robots.txt | 6 |
+| Page returns HTTP 200 (not redirect loop or error) | 2 |
+| robots.txt accessible (HTTP 200, non-HTML body) | 2 |
+| No `noindex` signal (meta tag or `X-Robots-Tag` header) | 7 |
+| No snippet-blocking signal (`nosnippet`, `max-snippet:0`, or `data-nosnippet` over core content) | 6 |
+| `<link rel="canonical">` set and pointing to this page | 2 |
 
-### Category 3: Semantic HTML & Technical (20 pts)
+> Google AI Overviews and AI Mode use normal Google Search systems — Googlebot access, indexability, and snippet eligibility. There are no additional technical requirements. `Google-Extended` is a model-use directive and does NOT control AI Overviews eligibility.
+
+### Category 2: Helpful Non-Commodity Content (25 pts)
+
+This is the highest-leverage category. Google's guide is explicit: the most important long-term factor is unique, people-first, non-commodity content. This category is scored by judgment from reading the page — no DOM snippet can measure it.
+
+| Check | Points |
+|-------|-------:|
+| Unique perspective or first-hand expertise (not a rewrite of any generic summary) | 8 |
+| Content satisfies visitor intent without leaving them needing to search again | 7 |
+| Depth beyond commodity: specific details, original examples, or expert judgment | 6 |
+| AI-generated content (if present) is useful and original — not filler that adds length without value | 4 |
+
+> Score conservatively. A page that "covers the topic" but offers no unique insight scores low here. A page with clear first-hand authority, specific evidence, and complete answers scores high.
+
+### Category 3: Content Organization & Extractability (20 pts)
+
+| Check | Points |
+|-------|-------:|
+| Single H1 matching query intent | 3 |
+| Logical heading hierarchy (H1 → H2 → H3, no skipped levels) | 2 |
+| Direct answer in first paragraph (≤ 80 words) | 4 |
+| FAQ or structured Q&A section present | 3 |
+| Tables or ordered lists used for structured content | 2 |
+| Internal links ≥ 3 (page is woven into site's link graph) | 3 |
+| Query fan-out coverage: ≥ 3 expected sub-topics appear naturally | 3 |
+
+> Query fan-out scoring: 3 pts if ≥ 3 sub-topics present naturally; 2 pts for 2; 1 pt for 1; 0 pts for none. Sub-topics should appear as headings or substantive body sections — not keyword mentions.
+
+### Category 4: Technical Structure & Page Experience (15 pts)
 
 | Check | Points |
 |-------|-------:|
 | `<main>` element present | 3 |
-| `<article>` element present | 2 |
-| `<title>` present and 50–60 characters | 3 |
-| `<meta name="description">` present | 2 |
-| `<link rel="canonical">` set | 2 |
+| `<article>` element (or semantic sectioning) present | 2 |
+| `<title>` 50–60 chars + `<meta name="description">` present | 3 |
 | All images have non-empty `alt` text | 3 |
 | Interactive elements have ARIA labels or titles | 2 |
-| Open Graph tags present (`og:title` + `og:description`) | 3 |
+| Open Graph tags present (`og:title` + `og:description` + `og:image`) | 2 |
 
-### Category 4: Content Quality Signals (20 pts)
+### Category 5: Entity & Enhancement Signals (15 pts)
 
-| Check | Points |
-|-------|-------:|
-| Named author attribution visible on the page | 4 |
-| Publication or "last updated" date visible | 4 |
-| Statistics or quantitative data present | 4 |
-| Outbound links to external authoritative sources | 4 |
-| Clear answer block or definition aligned with query intent | 4 |
-
-> These five signals directly map to the Princeton GEO research findings (KDD 2024): citing sources (+40%), adding statistics (+37%), and authoritative tone (+25%) are the highest-impact visibility boosters.
-
-### Category 5: Structured Data / Schema (20 pts)
+Schema is described here as supporting entity clarity and rich results — it is **not** a hard requirement for AI Overviews. Cross-platform bot access is tracked here as an enhancement signal, not a Google AI eligibility gate.
 
 | Check | Points |
 |-------|-------:|
-| JSON-LD `<script>` block(s) detected via browser | 4 |
-| Article, BlogPosting, or Organization schema type present | 4 |
-| FAQPage schema present (if FAQ content exists on page) | 3 |
-| BreadcrumbList schema present | 3 |
-| HowTo schema present (if step-by-step content exists) | 3 |
-| Schema blocks are valid, parseable JSON and non-empty | 3 |
+| JSON-LD schema present, parseable, and matching visible page content | 3 |
+| Named author attribution visible | 3 |
+| Publication or "last updated" date visible | 3 |
+| Statistics or quantitative data with source attribution | 3 |
+| Cross-platform AI bots not blocked (GPTBot, PerplexityBot, ClaudeBot, Bingbot) | 3 |
 
 ---
 
@@ -280,18 +296,26 @@ Produce the full audit report (see Output Format below).
 ## Output Format
 
 ```
-## GEO Audit: [URL]
+## Google AI Search Readiness Audit: [URL]
 **Overall Score: XX/100** — Grade: [A/B/C/D/F]
 Audited: [YYYY-MM-DD]
 
+### Google AI Search Eligibility: [ELIGIBLE / AT RISK / BLOCKED / UNKNOWN]
+- Googlebot access: [allowed / blocked]
+- Indexing: [allowed / blocked by noindex]
+- Snippets: [allowed / blocked by nosnippet or max-snippet:0]
+
+> ELIGIBLE: all three green. AT RISK: one check degraded but not a hard block.
+> BLOCKED: any hard block present. UNKNOWN: robots.txt inaccessible or page behind auth.
+
 ### Score Breakdown
-| Category                   | Score  |
-|----------------------------|-------:|
-| Google Search & AI Bot Access | XX/20 |
-| Content Organization       | XX/20  |
-| Semantic HTML & Technical  | XX/20  |
-| Content Quality Signals    | XX/20  |
-| Structured Data (Schema)   | XX/20  |
+| Category                              | Score  |
+|---------------------------------------|-------:|
+| Google Search AI Eligibility          | XX/25  |
+| Helpful Non-Commodity Content         | XX/25  |
+| Content Organization & Extractability | XX/20  |
+| Technical Structure & Page Experience | XX/15  |
+| Entity & Enhancement Signals          | XX/15  |
 
 > **Technical Note:** sitemap.xml [found at X / not detected] | About page [linked / not found] | Contact page [linked / not found]
 
@@ -306,21 +330,29 @@ Audited: [YYYY-MM-DD]
 ---
 
 ### ✅ Passing Checks
-- [list each passing check with the category it belongs to]
+- [list each passing check with category]
 
 ---
 
 ### ❌ Failed Checks — Highest Impact First
 | Issue | Category | Impact | Recommended Fix |
 |-------|----------|:------:|----------------|
-| Googlebot blocked in robots.txt | AI Bot Access | HIGH | Remove the Disallow rule for Googlebot so the page can be crawled for Search and AI features |
-| No JSON-LD schema detected | Structured Data | MEDIUM | Add relevant standard schema.org JSON-LD to clarify entities and support rich results |
+| Googlebot blocked in robots.txt | Eligibility | HIGH | Remove Disallow rule for Googlebot — this blocks all Google Search AI features |
+| Content is generic / commodity | Helpful Content | HIGH | Add first-hand examples, specific data, or expert opinion that a generic summary cannot replicate |
 | ...   | ...      | ...    | ...            |
 
 **Supplemental flags (informational — not scored):**
-- If `internalLinks < 3`: add row `Thin internal link structure (< 3 internal links) | Content Quality | MEDIUM | Add contextual links to related pages`
-- If `hasAbout` and `hasContact` are both false: add row `No About or Contact page detected | Trust Signals | MEDIUM | Add visible company/contact information to help users and quality evaluators understand who is behind the site`
-- If any informational bot (`Google-Extended`, `Gemini-Bot`, `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai`) is blocked: note in Technical Note section
+- If `internalLinks < 3`: flag `Thin internal link structure — add contextual links to related pages`
+- If `hasAbout` and `hasContact` both false: flag `No About or Contact page detected — add visible company/contact information`
+- If any informational bot (`Google-Extended`, `Gemini-Bot`, `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai`) is blocked: note in Technical Note
+
+---
+
+### Query Fan-Out Coverage
+**Target queries:** [list from Initial Assessment]
+**Expected sub-topics:** [list generated in Step 2.5]
+**Present:** [sub-topics found in headings or body]
+**Missing:** [sub-topics absent — these are content gap opportunities]
 
 ---
 
@@ -332,16 +364,17 @@ Audited: [YYYY-MM-DD]
 **Medium Effort (1–4 hrs)**
 1. [fix] — [why it matters]
 
-**Longer Term**
+**Longer Term (content work)**
 1. [fix] — [why it matters]
 
 ---
 
 ### ⚠️ What NOT to Do
 - Do not add a llms.txt file — Google's guide explicitly states it has no effect
-- Do not add special AI-targeted schema types — standard schema.org is what matters
+- Do not add special AI-targeted schema — standard schema.org is what matters; schema is not required for AI Overviews
 - Do not rewrite content specifically for AI systems — write for humans
 - Do not chunk content into artificially small pieces
+- Do not treat Google-Extended as an AI Overviews blocker — Googlebot + noindex/nosnippet are the real gates
 ```
 
 **If the user requested JSON output**, produce only the following structure with no surrounding prose:
@@ -352,18 +385,30 @@ Audited: [YYYY-MM-DD]
   "score": 72,
   "grade": "C",
   "audited": "YYYY-MM-DD",
+  "eligibility": {
+    "verdict": "AT RISK",
+    "googlebot": "allowed",
+    "indexing": "allowed",
+    "snippets": "blocked by nosnippet"
+  },
   "categories": {
-    "google_search_and_ai_bot_accessibility": { "score": 20, "max": 20 },
-    "content_organization":  { "score": 14, "max": 20 },
-    "semantic_html":         { "score": 16, "max": 20 },
-    "content_quality":       { "score": 12, "max": 20 },
-    "structured_data":       { "score": 10, "max": 20 }
+    "google_search_ai_eligibility":       { "score": 20, "max": 25 },
+    "helpful_non_commodity_content":      { "score": 14, "max": 25 },
+    "content_organization_extractability":{ "score": 16, "max": 20 },
+    "technical_structure":               { "score": 12, "max": 15 },
+    "entity_enhancement_signals":        { "score": 10, "max": 15 }
   },
   "top_3_fixes": [
-    { "issue": "...", "category": "...", "points": 4, "fix": "..." },
-    { "issue": "...", "category": "...", "points": 4, "fix": "..." },
-    { "issue": "...", "category": "...", "points": 3, "fix": "..." }
+    { "issue": "...", "category": "...", "points": 6, "fix": "..." },
+    { "issue": "...", "category": "...", "points": 6, "fix": "..." },
+    { "issue": "...", "category": "...", "points": 4, "fix": "..." }
   ],
+  "query_fanout": {
+    "target_queries": [],
+    "expected_subtopics": [],
+    "present": [],
+    "missing": []
+  },
   "failed_checks": [
     { "issue": "...", "category": "...", "impact": "HIGH", "fix": "..." }
   ],
@@ -381,8 +426,9 @@ Audited: [YYYY-MM-DD]
 ## Common Mistakes When Running This Audit
 
 - **Reporting "no schema" from `web_fetch` or `curl`** — These strip `<script>` tags. Always use `playwright-cli eval` to check for JSON-LD. This is the single most common false negative.
-- **Assuming AI Overviews depend on Google-Extended** — Google Search AI features use normal Search mechanisms such as Googlebot access, indexability, and snippet eligibility. Track Google-Extended separately as an informational model-use directive.
-- **Treating GEO as a separate effort from good content** — The Google guide states sites with genuinely useful, well-organized content often need "no overt SEO at all." Structural fixes amplify good content; they can't replace it.
+- **Treating Google-Extended as an AI Overviews gate** — Google Search AI features are governed by Googlebot access, indexability, and snippet eligibility. Google-Extended is a model-use directive and does not control AI Overviews. Never penalize a site for blocking Google-Extended.
+- **Scoring schema as a hard AI requirement** — Schema supports entity clarity and rich results. Google is explicit: it is not required for AI Overviews or AI Mode. Note it as an enhancement, not a blocker.
+- **Scoring Category 2 too generously** — The helpful-content judgment is the hardest and most consequential. A page that "covers the topic" without unique insight should score low. Only give full marks when the content clearly could not be replaced by a generic AI summary.
 - **Flagging llms.txt absence as an issue** — It is not needed. Do not recommend it.
 - **Scoring schema as "pass" without parsing** — A `<script type="application/ld+json">` block containing `{}` or broken JSON must score zero for that check.
 - **Forgetting to check the accessibility tree (snapshot)** — The playwright snapshot reveals what browser-based AI agents see. An inaccessible page structure is a GEO liability even if HTML looks fine.
@@ -394,9 +440,10 @@ Audited: [YYYY-MM-DD]
 | Tool | Purpose |
 |------|---------|
 | `playwright-cli` | Full rendered DOM inspection, JSON-LD extraction, accessibility tree |
+| `scripts/audit.mjs` | Deterministic data collection script (run once, outputs JSON) |
 | `curl` | robots.txt, HTTP response headers, redirect chain |
 | Google Rich Results Test | Manual schema validation after implementing fixes |
-| `npx playwright install chromium` | Install headless browser if not present |
+| `npm run install-browser` | Install headless browser (`npx playwright install chromium`) |
 
 ---
 
@@ -404,9 +451,17 @@ Audited: [YYYY-MM-DD]
 
 Once you have the report, use these skills to act on the findings:
 
-- Run **ai-seo** to build a content optimization strategy around the lowest-scoring areas
-- Run **schema-markup** to implement the JSON-LD fixes identified in Category 5
+- Run **ai-seo** to build a content strategy around the lowest-scoring areas
+- Run **schema-markup** to implement the JSON-LD improvements identified in Category 5
 - Run **seo-audit** if technical issues (redirects, canonicals, crawl blocks) need deeper diagnosis
+
+### Measuring AI Search Impact
+
+Google reports AI feature traffic in Search Console under the **Web search type** — there is no separate "AI Overview" report. To measure impact:
+- Track impressions and clicks for the target query clusters over 90-day windows
+- Compare before/after content changes (allow 4–6 weeks for re-crawl and re-evaluation)
+- Use Google Analytics to track session quality (time on page, bounce rate, conversion) separately from click volume — AI-cited pages may see fewer but higher-intent clicks
+- Do not expect a dedicated AI Overview performance report; use the Web search type filter
 
 ---
 
@@ -416,15 +471,28 @@ Once you have the report, use these skills to act on the findings:
 2. What type of site is this? (SaaS, blog, e-commerce, local business, documentation)
 3. What are the top 3–5 queries you want this page to appear in AI answers for?
 4. Do you currently see this site cited in Google AI Overviews, ChatGPT, or Perplexity?
-5. Is there a specific category (bot access, schema, content quality) you're most concerned about?
+5. Is there a specific category you're most concerned about?
+
+---
+
+## Agent Readiness Check (Optional — Not Scored)
+
+If the user is concerned about AI agent experiences (Google AI Mode with web browsing, agentic AI workflows), run these additional checks beyond the 100-pt score:
+
+- **Playwright snapshot:** does the accessibility tree expose all key content? Content hidden behind JS interactions, modals, or infinite scroll is invisible to agents.
+- **Interaction paths:** can an agent click through to purchase, sign up, or find key information without being blocked by CAPTCHAs or login gates?
+- **Forms and CTAs:** do they have clear `aria-label` attributes and descriptive button text?
+- **Media:** do videos have visible transcripts? Are images described well enough for a text-only agent?
+
+Report findings as a qualitative "Agent Readiness" note in the report — not a scored section.
 
 ---
 
 ## Related Skills
 
-- **ai-seo** — Content optimization strategy; turns audit findings into a concrete action plan for getting cited
-- **seo-audit** — Traditional technical and on-page SEO audit; complements this GEO audit
-- **schema-markup** — Implementing the structured data changes identified in Category 5
-- **competitor-alternatives** — Build comparison pages, one of the most-cited content formats in AI answers (~33% citation share)
+- **ai-seo** — Content optimization strategy; turns audit findings into a concrete action plan
+- **seo-audit** — Traditional technical and on-page SEO audit; complements this readiness audit
+- **schema-markup** — Implementing the structured data improvements identified in Category 5
+- **competitor-alternatives** — Build comparison pages, one of the most-cited content formats in AI answers
 - **programmatic-seo** — Building AI-optimized content at scale
-- **site-architecture** — Improving the semantic HTML structure and navigation hierarchy flagged in Category 3
+- **site-architecture** — Improving the semantic HTML structure and navigation hierarchy

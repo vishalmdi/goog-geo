@@ -1,163 +1,292 @@
 # GEO Scoring Rubric — Detailed Criteria
 
-Detailed per-check criteria for the 5-category, 100-point GEO scoring framework. Use this when a check result is ambiguous or a site has partial compliance.
+Detailed per-check criteria for the 5-category, 100-point scoring framework. Use this when a check result is ambiguous or a site has partial compliance.
+
+Total: **25 + 25 + 20 + 15 + 15 = 100 pts**
 
 ---
 
-## Category 1: Google Search & AI Bot Accessibility (20 pts)
+## Category 1: Google Search AI Eligibility (25 pts)
+
+This category captures the three hard gates that determine whether Google can crawl, index, and excerpt the page for AI Overviews and AI Mode. A page blocked by any of these checks cannot appear in Google's AI features regardless of content quality.
 
 ### How to check robots.txt
 
 ```bash
-# Step 1: Check HTTP status
+# Step 1: HTTP status
 curl -sIL "https://[domain]/robots.txt" | grep -i "^HTTP/"
 
-# Step 2: Fetch content
+# Step 2: Content
 curl -sL "https://[domain]/robots.txt"
 ```
 
-Look for any `User-agent:` block followed by a `Disallow:` rule that would block the bot from the page being audited. A `Disallow: /` blocks the entire site. A `Disallow: /blog/` would block blog pages but not the homepage.
+Look for any `User-agent:` block followed by a `Disallow:` rule covering the audited page. A `Disallow: /` blocks the entire site.
 
-Also grep for these bots:
-- Google Search AI eligibility (scored): `Googlebot`
-- Cross-platform AI access (scored): `GPTBot`, `ChatGPT-User`, `PerplexityBot`, `ClaudeBot`, `anthropic-ai`, `Bingbot`
-- Informational bot controls: `Google-Extended`, `Gemini-Bot`, `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai`
-
-Also check for a `Crawl-delay` directive. Google does not support `Crawl-delay` in robots.txt, so it must not be scored as a Google Search AI issue. Report high delays as informational crawl friction for non-Google bots.
-
-Also check `X-Robots-Tag` HTTP response header from the page URL: `curl -sIL "[page-url]" | grep -i "x-robots-tag"`. If it contains `noindex`, treat it identically to a noindex meta tag.
-
-### Scoring Rules
-
-**robots.txt accessible (2 pts)**
-- 2 pts: HTTP 200 response with plain-text body
-- 1 pt: HTTP 200 but file is empty (technically accessible; no blocks)
-- 0 pts: HTTP 404, connection error, OR HTTP 200 but body starts with `<!DOCTYPE` or `<html` (host serving an HTML error page — treat as missing)
-
-**Crawl-delay note:** If a `Crawl-delay` directive > 10 seconds is found for any non-Google AI bot, report it in the audit output as informational. Do not deduct points.
-
-**Googlebot not blocked (4 pts)** — Google Search AI crawl eligibility
-- 4 pts: No `User-agent: Googlebot` + `Disallow` rule covering the target page
-- 2 pts: Googlebot blocked on some sections but not the audited page
-- 0 pts: `User-agent: Googlebot` / `Disallow: /` or disallow covering the page
-
-**GPTBot / ChatGPT-User not blocked (3 pts)**
-- 3 pts: Neither `GPTBot` nor `ChatGPT-User` is blocked for the target page
-- 1 pt: One is blocked, the other is not
-- 0 pts: Both blocked covering the target page
-
-**PerplexityBot not blocked (2 pts)**
-- 2 pts: No `User-agent: PerplexityBot` + `Disallow` covering the target page
-- 0 pts: PerplexityBot blocked
-
-**ClaudeBot / anthropic-ai not blocked (2 pts)**
-- 2 pts: Neither `ClaudeBot` nor `anthropic-ai` is blocked
-- 1 pt: One is blocked, the other is not
-- 0 pts: Both blocked
-
-**Bingbot not blocked (1 pt)**
-- 1 pt: No `User-agent: Bingbot` + `Disallow` covering the target page
-- 0 pts: Bingbot blocked
-
-**No `noindex` signal (3 pts)**
-
-Check both sources:
-1. Meta tag (via browser):
-```bash
-playwright-cli eval "document.querySelector('meta[name=robots]')?.content"
-```
-2. HTTP header (already captured in Step 1):
+Also check `X-Robots-Tag` HTTP response header from the page URL:
 ```bash
 curl -sIL "[page-url]" | grep -i "x-robots-tag"
 ```
 
-Scoring — use the most restrictive signal found across either source:
-- 3 pts: No robots directives, OR permissive `index,follow`
-- 1 pt: `noarchive` only (cache blocked but indexing is still allowed)
-- 0 pts: `noindex` (from meta tag OR `X-Robots-Tag` header) — page will not be indexed
+If it contains `noindex` or `nosnippet`, treat it identically to the meta tag equivalent.
 
-**No snippet-blocking signal (3 pts)**
+Check robots.txt body: if the HTTP 200 response body begins with `<!DOCTYPE` or `<html`, the host is serving an HTML error page — treat as missing.
 
-Check meta robots, `X-Robots-Tag`, and broad `data-nosnippet` usage around the core answer content.
-- 3 pts: No snippet restrictions, OR `max-snippet:-1` (unlimited snippet length)
-- 2 pts: Narrow `data-nosnippet` appears outside the core answer content
-- 1 pt: `max-snippet` is set to a small positive value that may limit useful excerpts
-- 0 pts: `nosnippet`, `max-snippet:0`, or `data-nosnippet` wraps the core answer content
-
-**Informational bots — no additional points:**
-Check for `Google-Extended`, `Gemini-Bot`, `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai` in robots.txt. If any are blocked, report in the Technical Note section of the audit output. Do not deduct points. `Google-Extended` does not control Google Search AI Overview eligibility.
+**Crawl-delay note:** Google ignores `Crawl-delay`. Report it as informational for non-Google bots only; do not deduct points.
 
 ---
 
-## Category 2: Content Organization (20 pts)
+### Scoring Rules
 
-### How to check headings
+**robots.txt accessible (2 pts)**
+- 2 pts: HTTP 200 with plain-text body
+- 1 pt: HTTP 200 but file is empty (no blocks, still accessible)
+- 0 pts: HTTP 404, connection error, or HTTP 200 with HTML body (host serving an error page)
+
+**Googlebot not blocked (6 pts)** — primary gate for all Google Search AI features
 
 ```bash
-playwright-cli eval "JSON.stringify(Array.from(document.querySelectorAll('h1,h2,h3,h4')).map(h=>({tag:h.tagName,text:h.innerText.trim().substring(0,120)})))"
+curl -sL "https://[domain]/robots.txt" | grep -i -A5 "user-agent: googlebot\|user-agent: \*"
 ```
+
+- 6 pts: No `User-agent: Googlebot` or `User-agent: *` disallow rule covering the target page
+- 3 pts: Googlebot blocked on some sections but not the audited URL
+- 0 pts: `Disallow: /` under `User-agent: Googlebot` or `User-agent: *` covering the page
+
+> This is the highest-weighted single check (6 pts) because blocking Googlebot is the most impactful mistake a site can make for AI search eligibility — it prevents all Google features from seeing the page.
+
+**HTTP 200 response (2 pts)**
+
+Check from the curl headers captured in Step 1 of the audit workflow.
+- 2 pts: Page returns HTTP 200 (not a redirect or error)
+- 1 pt: Page redirects but ultimately resolves to a 200 (redirect chain adds crawl friction)
+- 0 pts: Page returns 3xx without resolution, 4xx, or 5xx
+
+**No `noindex` signal (7 pts)** — prevents the page from appearing in any Google Search result
+
+Check both sources:
+1. Meta tag (via browser): `playwright-cli eval "document.querySelector('meta[name=robots]')?.content"`
+2. HTTP header: `curl -sIL "[page-url]" | grep -i "x-robots-tag"`
+
+Apply the most restrictive signal found across either source:
+- 7 pts: No robots directives, OR permissive `index,follow`
+- 5 pts: `noarchive` only (cache blocked but indexing allowed — minor impact)
+- 0 pts: `noindex` in meta tag OR `X-Robots-Tag` header — page cannot be indexed or cited
+
+> Weighted highest at 7 pts because `noindex` is a hard technical block: a page marked `noindex` is completely invisible to all Google AI features. This is often set accidentally.
+
+**No snippet-blocking signal (6 pts)** — prevents the AI from excerpting content even when indexed
+
+Check meta robots content and `X-Robots-Tag` header for snippet directives. Also check for `data-nosnippet` attributes wrapping the core answer content.
+
+```bash
+playwright-cli eval "document.querySelector('meta[name=robots]')?.content"
+playwright-cli eval "document.querySelectorAll('[data-nosnippet]').length"
+```
+
+- 6 pts: No snippet restrictions, OR `max-snippet:-1` (unlimited)
+- 4 pts: Narrow `data-nosnippet` appears outside the core answer content (ads, footers)
+- 2 pts: `max-snippet` set to a positive value (e.g., `max-snippet:160`) — limits but doesn't eliminate excerpts
+- 0 pts: `nosnippet`, `max-snippet:0`, or `data-nosnippet` wrapping the core answer content
+
+> AI Overviews pull page excerpts as the primary content signal. A page with `nosnippet` or `max-snippet:0` cannot be excerpted even if indexed, effectively blocking it from AI citation.
+
+**Canonical set and self-referencing (2 pts)**
+
+```bash
+playwright-cli eval "document.querySelector('link[rel=canonical]')?.href"
+```
+
+- 2 pts: Canonical present and points to the current page URL (self-referencing)
+- 1 pt: Canonical missing OR points to a different URL (may be intentional — note it; no full penalty if consistent with site strategy)
+- 0 pts: Canonical points to a completely different domain (likely an error)
+
+---
+
+### Informational Bots (not scored in Category 1)
+
+Check for these in robots.txt and report findings in a Technical Note — but do not score or penalize:
+- `Google-Extended` — model training/grounding directive; does NOT affect Google AI Overviews
+- `Gemini-Bot` — Vertex AI grounding, not Search AI Overviews
+- `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai` — third-party AI products
+
+Cross-platform AI bots (GPTBot, PerplexityBot, ClaudeBot, Bingbot) are scored in Category 5.
+
+---
+
+## Category 2: Helpful Non-Commodity Content (25 pts)
+
+This is the only category scored by the auditor's judgment rather than DOM extraction. It captures what Google identifies as the highest-leverage long-term factor: uniquely valuable, people-first, non-commodity content.
+
+**How to evaluate:** Read the first 800 words of visible text from the playwright snapshot. Score each check based on the evidence in that content. If a page is short, read the full content.
+
+Ask the user "Does this page reflect first-hand expertise or original research?" if the content is ambiguous. Score conservatively when evidence is mixed.
+
+### Why this category is 25 pts
+
+Google's AI optimization guide states explicitly: "Success often requires no overt SEO at all." The single most impactful factor for long-term AI citation is having content that is genuinely more useful than what a generic AI summary would produce. DOM signals and schema cannot measure this — human judgment is required.
+
+---
 
 ### Scoring Rules
 
-**Exactly one H1 (3 pts)**
-- 3 pts: Exactly one H1 element
-- 1 pt: Zero H1 elements (page has content but no H1)
-- 0 pts: Two or more H1 elements (heading hierarchy is broken)
+**Unique perspective or first-hand expertise (8 pts)**
 
-**Logical heading hierarchy (3 pts)**
-- 3 pts: H1 → H2 → H3 structure, no skipped levels (no H1 → H3 without H2)
-- 2 pts: Mostly logical with one skipped level
-- 0 pts: Chaotic heading structure or headings used for styling only
+Does this content reflect direct experience, original research, or expert judgment — or is it a rewrite of what any generic AI summary would produce?
 
-**H1 reflects page intent (3 pts)**
+Evidence to look for:
+- Named author with domain credentials
+- Specific examples, anecdotes, or case studies from the author's experience
+- Data or findings collected by the author's organization
+- Opinions stated with reasoning ("We've found that X, because...")
+- Jargon and nuance that only comes from deep domain practice
 
-Compare the H1 text to the URL, `<title>`, and the user-stated target queries.
-- 3 pts: H1 clearly matches the apparent query intent (e.g., URL is `/best-crm-software`, H1 is "Best CRM Software for Small Business")
-- 2 pts: H1 is related but generic (e.g., "Welcome to Our Blog")
-- 0 pts: H1 is decorative, missing, or completely unrelated to the page topic
+Scoring tiers:
+- 8 pts: Strong first-hand signals throughout — named expert author, original examples or data, opinions with specific reasoning
+- 6 pts: Some first-hand signals — author named, a few original examples, but mostly synthesizes secondary sources
+- 4 pts: Competent but generic — well-organized summary of publicly available information, no original contribution
+- 2 pts: Shallow overview — list of facts any LLM would produce, no author perspective
+- 0 pts: Clearly AI-generated filler, duplicate content, or content that adds no informational value over a Wikipedia article
 
-**FAQ or Q&A section (3 pts)**
+**Content satisfies visitor intent without leaving them to search again (7 pts)**
+
+After reading this page, would a user have their question fully answered — or would they need another search?
+
+Evidence to look for:
+- Specific, actionable recommendations (not "it depends" without elaboration)
+- Addresses follow-up questions the visitor would naturally have
+- Includes examples, comparisons, or step-by-step guidance where relevant
+- Doesn't end abruptly after a surface-level overview
+
+Scoring tiers:
+- 7 pts: Complete answer — covers the core question plus the 2–3 natural follow-up questions; user has no reason to search again
+- 5 pts: Mostly satisfying — core question answered but follow-ups addressed only superficially
+- 3 pts: Partial answer — addresses the topic but requires the user to seek clarification elsewhere for key details
+- 1 pt: Thin content — mentions the topic but doesn't meaningfully answer the implied query
+- 0 pts: Content doesn't answer the query at all (wrong page, navigation page, empty section)
+
+**Depth beyond commodity: specific details, examples, or expert judgment (6 pts)**
+
+Does the content include things that could only come from direct knowledge — exact numbers, named tools, honest trade-off comparisons, failure modes, or hard-won nuance?
+
+Evidence to look for:
+- Specific product names, version numbers, pricing tiers mentioned from experience
+- Named real-world examples (not hypothetical scenarios)
+- Explicit trade-off discussion ("X is better for A, but worse for B")
+- Warnings, caveats, or failure modes that synthetic content tends to omit
+- Structured depth: the page covers sub-topics at a level that shows domain mastery
+
+Scoring tiers:
+- 6 pts: Rich depth — multiple specific details, real examples, explicit trade-offs, or failure-mode awareness
+- 4 pts: Some depth — one or two specific details or real examples, but the rest is generic
+- 2 pts: Minimal depth — mostly general claims without supporting specifics
+- 0 pts: No depth — generic overview that any summary model would produce
+
+**AI-generated content quality, if present (4 pts)**
+
+If there is no indication of AI-generated content, award 4 pts by default — this check penalizes AI use only when it produces filler.
+
+If AI-generated content is suspected or disclosed:
+- 4 pts: AI content is clearly useful, original in framing, and accurate — indistinguishable in quality from human expert writing
+- 3 pts: AI content is accurate and readable but feels generic or impersonal
+- 1 pt: AI content adds length but not value — padded, repetitive, or off-topic sections
+- 0 pts: AI-generated filler content that reduces the page's overall usefulness: keyword stuffing, nonsensical elaborations, or factually incorrect AI hallucinations
+
+> If the user discloses AI-assisted writing that is high quality, award full marks. This check targets low-quality AI abuse, not AI assistance.
+
+---
+
+## Category 3: Content Organization & Extractability (20 pts)
+
+This category measures whether AI systems can extract direct answers, find structured content, and verify that the page covers the topic in depth. Both technical signals and query intent coverage are scored here.
+
+### Scoring Rules
+
+**Single H1 matching query intent (3 pts)**
+
+```bash
+playwright-cli eval "JSON.stringify(document.querySelectorAll('h1').length + ':' + document.querySelector('h1')?.innerText?.trim()?.substring(0,120))"
+```
+
+- 3 pts: Exactly one H1 that clearly matches the page's implied query intent
+- 2 pts: One H1 but it's generic or doesn't reflect the target query
+- 1 pt: Zero H1 elements (content present but no H1)
+- 0 pts: Two or more H1 elements (heading hierarchy broken)
+
+Compare H1 text to the URL slug, `<title>`, and user-stated target queries. An H1 of "Best CRM Software for Small Business" on a URL of `/best-crm-software` = full marks.
+
+**Logical heading hierarchy (2 pts)**
+
+```bash
+playwright-cli eval "JSON.stringify(Array.from(document.querySelectorAll('h1,h2,h3,h4')).map(h=>({tag:h.tagName,text:h.innerText.trim().substring(0,80)})))"
+```
+
+- 2 pts: Correct H1 → H2 → H3 sequence with no skipped levels
+- 1 pt: Mostly logical with one skipped level (e.g., H1 → H3 in one section)
+- 0 pts: Chaotic hierarchy, multiple skipped levels, or headings used as styling only
+
+**Direct answer in first paragraph (4 pts)**
+
+The first paragraph should function as a standalone answer block — AI systems extract the first substantial paragraph as a definition or summary.
+
+Read the first visible paragraph from the playwright snapshot.
+- 4 pts: First paragraph (≤ 80 words) directly and completely answers the implied query
+- 3 pts: First paragraph relevant and concise but addresses the topic rather than answering the question directly
+- 2 pts: First paragraph is relevant but wordy (80–150 words) or buried under introductory fluff
+- 1 pt: First paragraph addresses the topic but requires more context to answer the query
+- 0 pts: First paragraph is navigation text, a cookie notice, or completely off-topic
+
+**FAQ or structured Q&A section (3 pts)**
 
 ```bash
 playwright-cli eval "!!(document.querySelector('[class*=faq],[id*=faq],details,dt')||/(?:frequently asked|faq|q&a|questions)/i.test(document.body.innerText.substring(0,5000)))"
 ```
 
-- 3 pts: Dedicated FAQ section with at least 3 question-answer pairs, OR `<details>` elements, OR `<dl>` Q&A list
-- 1 pt: A few inline questions in prose but no dedicated section
-- 0 pts: No question-answer structure anywhere
+- 3 pts: Dedicated FAQ section with ≥3 question-answer pairs, OR `<details>` accordion elements, OR a `<dl>` Q&A list
+- 2 pts: A couple of inline Q&A pairs but no dedicated section
+- 1 pt: Questions posed in headings but not answered in a structured block
+- 0 pts: No question-answer structure anywhere on the page
 
-**Tables or ordered lists for structured content (3 pts)**
+**Tables or ordered lists for structured content (2 pts)**
 
 ```bash
 playwright-cli eval "({hasTables:!!document.querySelector('table'),hasOrderedLists:!!document.querySelector('ol')})"
 ```
 
-- 3 pts: Both tables and ordered lists present
-- 2 pts: One of the two present
-- 1 pt: Unordered lists only (better than nothing)
-- 0 pts: Pure prose with no structured formatting
+- 2 pts: Both tables and ordered lists present on the page
+- 1 pt: One of the two present
+- 0 pts: Pure prose with no structured formatting (unordered lists alone score 0 here — they indicate structure but not the higher-extractability formats)
 
-**Direct answer in first paragraph (3 pts)**
-
-The first paragraph should function as a standalone answer to the implied query — AI systems extract the first substantial paragraph as a definition or summary block.
-- 3 pts: First paragraph (≤ 80 words) directly answers the implied query intent
-- 2 pts: First paragraph is relevant but wordy or buried under introductory fluff
-- 1 pt: First paragraph addresses the topic but doesn't answer a query directly
-- 0 pts: First paragraph is navigation, cookie notice, or completely off-topic
-
-**Concise paragraphs (2 pts)**
+**Internal links ≥ 3 (3 pts)**
 
 ```bash
-playwright-cli eval "document.querySelector('main p, article p, p')?.innerText?.trim()?.split(/\s+/)?.length||0"
+playwright-cli eval "Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname===location.hostname||a.getAttribute('href')?.startsWith('/')).length"
 ```
 
-- 2 pts: First visible paragraph is ≤ 120 words (proxy for overall paragraph length)
-- 1 pt: First paragraph is 121–200 words
-- 0 pts: First paragraph exceeds 200 words (wall of text)
+- 3 pts: 3 or more internal links present (page is woven into the site graph)
+- 2 pts: 1–2 internal links
+- 0 pts: No internal links (page is isolated — related content is harder for AI to discover)
+
+**Query fan-out coverage (3 pts)**
+
+This check requires the auditor to reason from the target queries. Google generates sub-queries from the original query and seeks pages that collectively cover them. A page that naturally addresses multiple sub-topics is more likely to be cited.
+
+Steps:
+1. Take the 3–5 target queries provided in Initial Assessment
+2. Generate 6–10 likely sub-queries (e.g., "best CRM" → "CRM pricing," "CRM for small business," "CRM integrations with email," "CRM vs spreadsheet")
+3. Check whether each sub-topic appears naturally in H2/H3 headings or in body copy
+4. Count how many sub-topics are present
+
+Scoring:
+- 3 pts: 3 or more sub-topics present naturally as headings or substantive body sections
+- 2 pts: 2 sub-topics present
+- 1 pt: 1 sub-topic present
+- 0 pts: Page is focused on the primary query only; no sub-topic coverage
 
 ---
 
-## Category 3: Semantic HTML & Technical (20 pts)
+## Category 4: Technical Structure & Page Experience (15 pts)
+
+Semantic HTML and technical signals that help AI systems (and users) identify and navigate content. These checks are necessary but not sufficient — a technically clean page with shallow content will still underperform.
 
 ### Scoring Rules
 
@@ -167,214 +296,135 @@ playwright-cli eval "document.querySelector('main p, article p, p')?.innerText?.
 playwright-cli eval "!!document.querySelector('main')"
 ```
 
-- 3 pts: `<main>` present and wraps the primary content
-- 0 pts: No `<main>` element (content is in `<div>` soup)
+- 3 pts: `<main>` present and wraps the primary content area
+- 0 pts: No `<main>` element — content lives in `<div>` soup
 
-> `<main>` is the primary signal to browser-based AI agents for identifying the main content area. Missing it forces agents to guess.
+> `<main>` is the primary signal to browser-based AI agents for identifying where the page content begins and ends.
 
-**`<article>` element present (2 pts)**
+**`<article>` element or semantic sectioning (2 pts)**
 
 ```bash
-playwright-cli eval "!!document.querySelector('article')"
+playwright-cli eval "({hasArticle:!!document.querySelector('article'),hasSections:document.querySelectorAll('section').length})"
 ```
 
-- 2 pts: `<article>` wraps a self-contained piece of content
+- 2 pts: `<article>` present wrapping a self-contained piece of content
 - 1 pt: `<section>` elements used but no `<article>`
-- 0 pts: No semantic sectioning elements
+- 0 pts: No semantic sectioning elements at all
 
-**`<title>` present and 50–60 chars (3 pts)**
-
-```bash
-playwright-cli eval "({title:document.title,len:document.title.length})"
-```
-
-- 3 pts: Title present and 50–60 characters
-- 2 pts: Title present but 40–49 or 61–70 characters (slightly off)
-- 1 pt: Title present but under 40 or over 70 characters
-- 0 pts: No title, or title is the domain name only (e.g., "example.com")
-
-**`<meta name="description">` present (2 pts)**
+**`<title>` 50–60 chars + `<meta name="description">` present (3 pts)**
 
 ```bash
-playwright-cli eval "document.querySelector('meta[name=description]')?.content"
+playwright-cli eval "({title:document.title,titleLen:document.title.length,metaDesc:document.querySelector('meta[name=description]')?.content,metaDescLen:document.querySelector('meta[name=description]')?.content?.length})"
 ```
 
-- 2 pts: Present, 120–160 characters, descriptive
-- 1 pt: Present but very short (< 50 chars) or very long (> 200 chars)
-- 0 pts: Missing
+- 3 pts: Title is 50–60 characters AND meta description is present (120–160 chars ideal)
+- 2 pts: Title is present (any length) AND meta description is present, but one is out of range
+- 1 pt: Title present but no meta description, OR title is very short (< 20 chars) or very long (> 80 chars)
+- 0 pts: No title, title is the domain name only, AND no meta description
 
-**`<link rel="canonical">` set (2 pts)**
-
-```bash
-playwright-cli eval "document.querySelector('link[rel=canonical]')?.href"
-```
-
-- 2 pts: Canonical present and points to the correct page URL
-- 1 pt: Canonical present but points to a different URL (may be intentional — note it)
-- 0 pts: No canonical link
-
-**All images have `alt` text (3 pts)**
+**All images have non-empty `alt` text (3 pts)**
 
 ```bash
 playwright-cli eval "({total:document.querySelectorAll('img').length,missingAlt:document.querySelectorAll('img:not([alt])').length})"
 ```
 
-- 3 pts: All images have non-empty `alt` attributes (or zero images on page)
+- 3 pts: All images have non-empty `alt` attributes, OR zero images on the page
 - 2 pts: ≤ 20% of images missing `alt` text
 - 1 pt: 21–50% missing `alt` text
-- 0 pts: > 50% missing, or `alt=""` on all non-decorative images
+- 0 pts: > 50% missing, or `alt=""` on non-decorative images
 
 **Interactive elements have ARIA labels (2 pts)**
 
 ```bash
-playwright-cli eval "({labeled:document.querySelectorAll('[aria-label],[aria-labelledby],[title]').length,unlabeledButtons:document.querySelectorAll('button:not([aria-label]):not([title])').length,unlabeledLinks:document.querySelectorAll('a:not([aria-label]):not([title]):not([href])').length})"
+playwright-cli eval "({unlabeledButtons:document.querySelectorAll('button:not([aria-label]):not([title])').length,unlabeledLinks:document.querySelectorAll('a:not([aria-label]):not([title]):not([href])').length})"
 ```
 
-- 2 pts: All buttons and ambiguous links have ARIA labels or descriptive text
+- 2 pts: All buttons and ambiguous links have ARIA labels, titles, or descriptive visible text
 - 1 pt: Most labeled, a few gaps
 - 0 pts: Many unlabeled interactive elements (poor accessibility tree for agentic AI)
 
-**Open Graph tags present (3 pts)**
+**Open Graph tags present (2 pts)**
 
 ```bash
 playwright-cli eval "({ogTitle:document.querySelector('meta[property=\"og:title\"]')?.content,ogDesc:document.querySelector('meta[property=\"og:description\"]')?.content,ogImage:document.querySelector('meta[property=\"og:image\"]')?.content})"
 ```
 
-- 3 pts: `og:title`, `og:description`, and `og:image` all present
-- 2 pts: `og:title` and `og:description` present (image missing)
-- 1 pt: Only `og:title` present
-- 0 pts: No OG tags
+- 2 pts: `og:title`, `og:description`, and `og:image` all present
+- 1 pt: `og:title` and `og:description` present (image missing)
+- 0 pts: No OG tags, or only `og:title` alone
 
 ---
 
-## Category 4: Content Quality Signals (20 pts)
+## Category 5: Entity & Enhancement Signals (15 pts)
 
-These signals are drawn directly from the Princeton GEO research (KDD 2024) and Google's E-E-A-T guidelines.
+These signals enhance entity clarity, improve rich-result eligibility, and control cross-platform AI access. Schema is not required for Google AI Overviews, but it does support rich results and helps AI systems understand what a page is about, who wrote it, and when.
 
 ### Scoring Rules
 
-**Named author attribution visible (4 pts)**
+**JSON-LD schema present and parseable (3 pts)**
+
+Always use playwright-cli — never web_fetch or curl:
+
+```bash
+playwright-cli eval "Array.from(document.querySelectorAll('script[type=\"application/ld+json\"]')).map(s=>{try{return JSON.parse(s.textContent)}catch(e){return 'PARSE_ERROR'}})"
+```
+
+- 3 pts: One or more `<script type="application/ld+json">` blocks that parse successfully and contain meaningful data
+- 2 pts: Schema present but only via Microdata or RDFa (less preferred; parseable but not the recommended format)
+- 1 pt: JSON-LD present but some blocks fail to parse (mixed validity) or blocks are near-empty `{}`
+- 0 pts: No structured data detectable via browser eval, OR all blocks fail to parse
+
+> Schema supports rich results (e.g., FAQ carousels, breadcrumb trails) and entity recognition. It does not gate AI Overviews eligibility but is strong SEO hygiene.
+
+**Author attribution visible with name (3 pts)**
 
 ```bash
 playwright-cli eval "!!(document.querySelector('[rel=author],[class*=author],[itemprop=author],[data-author]')||/written by|by [A-Z][a-z]+ [A-Z][a-z]+/i.test(document.body.innerText.substring(0,3000)))"
 ```
 
-- 4 pts: Named author with credentials (e.g., "By Jane Smith, Senior SEO Analyst")
-- 3 pts: Named author visible but no credentials
-- 1 pt: Generic attribution only (e.g., "Staff Writer", "Admin", or site name)
+- 3 pts: Named author with credentials visible on the page (e.g., "By Jane Smith, Senior Analyst")
+- 2 pts: Named author visible but no credentials
+- 1 pt: Generic attribution only (e.g., "Staff Writer", "Admin", or company name)
 - 0 pts: No author attribution
 
-**Publication or "last updated" date visible (4 pts)**
+**Publication or "last updated" date visible (3 pts)**
 
 ```bash
 playwright-cli eval "!!(document.querySelector('time,[class*=date],[class*=published],[itemprop=datePublished],[class*=updated]')||/(?:published|updated|last updated|posted)[\s:]+\w+\s+\d{1,2},?\s+\d{4}/i.test(document.body.innerText.substring(0,5000)))"
 ```
 
-- 4 pts: Both published date AND "last updated" date visible
-- 3 pts: One date visible and it's within the last 12 months
-- 2 pts: One date visible but it's more than 12 months ago
-- 1 pt: Date detectable in code but not visible to users
+- 3 pts: Both a published date AND a "last updated" date are visible
+- 2 pts: One date visible and it's within the last 12 months
+- 1 pt: One date visible but it's more than 12 months old, OR date detectable in code but not visible to users
 - 0 pts: No date signals anywhere
 
-> Undated content almost always loses to dated content in AI citation. Freshness is one of Google's core signals for AI Overviews.
-
-**Statistics or quantitative data present (4 pts)**
+**Statistics or quantitative data with attribution (3 pts)**
 
 ```bash
 playwright-cli eval "/\d+[\.\,]?\d*\s*(%|percent|users|customers|companies|studies|million|billion|x\s+(?:faster|better|more))/i.test(document.body.innerText.substring(0,8000))"
 ```
 
-- 4 pts: Multiple specific statistics with sources (e.g., "74% of users report... (Gartner, 2024)")
-- 3 pts: Statistics present but without source attribution
-- 2 pts: One or two numbers but no percentages or studies
-- 1 pt: Vague quantitative language (e.g., "thousands of users")
-- 0 pts: No data or statistics
+- 3 pts: Multiple specific statistics with source attribution (e.g., "74% of users report... (Gartner, 2024)")
+- 2 pts: Statistics present but without source attribution
+- 1 pt: One or two raw numbers but no percentages or cited studies
+- 0 pts: No data, statistics, or quantitative claims
 
-**Outbound links to external authoritative sources (4 pts)**
+> The Princeton GEO study (KDD 2024) found that adding cited statistics increases AI citation visibility by 37%. Adding sources increases it by 40%.
 
-```bash
-playwright-cli eval "Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname!==location.hostname&&a.hostname&&!['twitter.com','facebook.com','instagram.com','linkedin.com'].includes(a.hostname)).length"
-```
-
-- 4 pts: 3 or more external links to authoritative sources (research papers, government sites, established publishers)
-- 3 pts: 1–2 external links to authoritative sources
-- 2 pts: External links present but to low-authority or promotional sources only
-- 1 pt: External links only to social profiles
-- 0 pts: No external links at all
-
-**Internal link count — informational (no points):** `internalLinks` is captured in step 3e. If < 3 internal links are found, add a supplemental flag: "Page appears isolated — low internal link count may make related content harder to discover." No points deducted.
-
-**Trust pages — informational (no points):** `hasAbout` and `hasContact` are captured in step 3d. If neither is linked from the audited page, add a supplemental flag: "No About or Contact page detected — users and quality evaluators may have less context about who is behind the site." No points deducted.
-
-**Clear answer block aligned with query intent (4 pts)**
-
-This requires human judgment based on the target queries provided. Read the first 500 words of content:
-- 4 pts: Content opens with a clear, direct answer to the implied query (definition block, direct statement, or summary box)
-- 3 pts: Answer is present in the first 3 paragraphs but not in the first paragraph
-- 2 pts: Answer is buried in the body of the content
-- 1 pt: Content is related to the query but doesn't directly answer it
-- 0 pts: Content doesn't address the query intent at all
-
----
-
-## Category 5: Structured Data / Schema (20 pts)
-
-### How to check schema
-
-Always use playwright-cli, never web_fetch or curl:
+**Cross-platform AI bots not blocked (3 pts)**
 
 ```bash
-playwright-cli eval "JSON.stringify(Array.from(document.querySelectorAll('script[type=\"application/ld+json\"]')).map(s=>s.textContent))"
+curl -sL "https://[domain]/robots.txt" | grep -iE "GPTBot|ChatGPT-User|PerplexityBot|ClaudeBot|anthropic-ai|Bingbot"
 ```
 
-Then parse each block to identify `@type` values.
+Check whether GPTBot, ChatGPT-User, PerplexityBot, ClaudeBot/anthropic-ai, and Bingbot are blocked.
 
-### Scoring Rules
+- 3 pts: None of the five platforms are blocked (all cross-platform AI bots have access)
+- 2 pts: One platform is blocked
+- 1 pt: Two platforms are blocked
+- 0 pts: Three or more platforms blocked, or a wildcard `User-agent: * / Disallow: /` that blocks all bots
 
-**JSON-LD block(s) detected (4 pts)**
-- 4 pts: One or more `<script type="application/ld+json">` blocks detected with non-empty content
-- 2 pts: Schema present but only via Microdata or RDFa (less preferred formats)
-- 0 pts: No structured data detected via browser eval
-
-**Article, BlogPosting, or Organization schema (4 pts)**
-- 4 pts: `Article`, `BlogPosting`, `NewsArticle`, or `Organization` schema present with required properties
-  - Article minimum: `headline`, `image`, `datePublished`, `author`
-  - Organization minimum: `name`, `url`
-- 2 pts: Schema type present but missing required properties
-- 0 pts: Schema type absent
-
-**FAQPage schema (3 pts)**
-
-Only score this check if a FAQ section was confirmed in Category 2.
-- 3 pts: `FAQPage` schema present with `mainEntity` array and at least 3 Q&A pairs
-- 1 pt: FAQPage schema present but with fewer than 3 pairs or invalid structure
-- 0 pts: FAQ content exists on page but no FAQPage schema, OR no FAQ on page (skip — mark N/A and redistribute 3 pts to partial credit elsewhere)
-- N/A: If no FAQ section found, award 3 pts automatically (not penalized for content type)
-
-**BreadcrumbList schema (3 pts)**
-- 3 pts: `BreadcrumbList` schema present with `itemListElement` array showing the page hierarchy
-- 1 pt: Breadcrumb visible in HTML but no schema markup
-- 0 pts: No breadcrumb schema (and site has multiple levels of navigation)
-- N/A (3 pts): Single-page sites or sites with flat structure where breadcrumbs aren't applicable
-
-**HowTo schema (3 pts)**
-
-Only score if step-by-step instructional content was detected.
-- 3 pts: `HowTo` schema with `name` and `step` array present
-- 1 pt: HowTo schema present but steps are incomplete
-- 0 pts: How-to content exists but no HowTo schema
-- N/A (3 pts): Page doesn't contain step-by-step content
-
-**Schema is parseable and non-empty (3 pts)**
-
-After extracting JSON-LD blocks, attempt to parse them:
-```bash
-playwright-cli eval "Array.from(document.querySelectorAll('script[type=\"application/ld+json\"]')).map(s=>{try{return JSON.parse(s.textContent)}catch(e){return 'PARSE_ERROR'}})"
-```
-
-- 3 pts: All schema blocks parse successfully and contain meaningful data
-- 1 pt: Some blocks parse, others fail (mixed validity)
-- 0 pts: All blocks fail to parse, OR all blocks are `{}` or near-empty
+> Blocking these bots does not affect Google AI Overviews (which uses Googlebot), but limits citation reach on ChatGPT, Perplexity, Claude, and Microsoft Copilot.
 
 ---
 
@@ -382,11 +432,10 @@ playwright-cli eval "Array.from(document.querySelectorAll('script[type=\"applica
 
 ### Single-Page Applications (SPAs)
 
-SPAs (React, Vue, Angular) render content via JavaScript. playwright-cli handles this correctly because it uses a real browser, but you may need to wait for content to load:
+SPAs render content via JavaScript. playwright-cli handles this correctly because it uses a real browser, but content may need time to load:
 
 ```bash
 playwright-cli open "[URL]"
-# Wait a moment for JS to render, then snapshot
 playwright-cli snapshot
 ```
 
@@ -394,46 +443,48 @@ If the snapshot shows empty content, the page may require authentication or have
 
 ### Pages Behind Authentication
 
-If the page returns a login redirect or CAPTCHA, the audit cannot be completed with playwright-cli. Note this in the report and score Category 1 based on what can be checked (robots.txt, headers) and leave other categories as "N/A — page not publicly accessible."
+If the page returns a login redirect or CAPTCHA, the audit cannot be completed fully. Note this in the report. Score only what curl and HTTP headers can verify (parts of Category 1). Mark Categories 2–5 as "N/A — page not publicly accessible." Do not estimate DOM results from static source.
 
-### Browser Unavailable (playwright-cli cannot be installed)
+### Browser Unavailable
 
-If playwright-cli installation fails, follow the partial audit path defined in SKILL.md Preflight. Score only what curl and HTTP headers can verify (parts of Category 1 and Category 3 meta tags). Mark Categories 2, 4, and 5 as `N/A — browser unavailable`. Do not estimate schema or DOM results from static source — a partial audit with honest gaps is more useful than a fabricated full audit.
+If playwright-cli installation fails, follow the partial audit path defined in SKILL.md Preflight. Score only what curl and HTTP headers can verify (parts of Category 1 and Category 4 meta tags via curl). Mark Categories 2, 3, and 5 as `N/A — browser unavailable`. A partial audit with honest gaps is more useful than a fabricated full audit.
 
 ### Sitemap Detection
 
-Sitemap presence is informational — do not add or deduct points. Report in the audit's Technical Note section. A missing sitemap on a site with > 10 pages should be included in the Action Plan as a supplemental recommendation because sitemaps can help crawlers discover canonical content URLs.
+Informational — no points. Check robots.txt for a Sitemap directive:
+```bash
+grep -i "^Sitemap:" robots.txt
+```
+Report in the Technical Note. A missing sitemap on a multi-page site should appear in the Action Plan as a supplemental recommendation.
 
 ### Dynamic Schema Injection
 
-Some CMS platforms inject schema only on specific page types. If running a homepage audit, check a representative content page (blog post, product page) too, as the homepage often has different schema than content pages.
+Some CMS platforms inject schema only on certain page types. If auditing a homepage, also check a representative content page (blog post, product page) — homepage schema often differs from content page schema.
 
-### Multilingual Sites
+### N/A Handling
 
-For multilingual sites, check `hreflang` tags as a bonus signal (not scored, but note in the report):
-```bash
-playwright-cli eval "Array.from(document.querySelectorAll('link[rel=alternate][hreflang]')).map(l=>({lang:l.hreflang,href:l.href}))"
-```
+When a check is genuinely N/A (e.g., Category 1 snippet-blocking when no snippet directives exist), award full points. The rubric penalizes active blocking, not absence of a signal.
 
 ---
 
 ## Scoring Shortcuts Reference
 
-| Signal | playwright-cli eval snippet |
-|--------|---------------------------|
-| H1 count | `document.querySelectorAll('h1').length` |
-| JSON-LD present | `document.querySelectorAll('script[type="application/ld+json"]').length > 0` |
-| Has `<main>` | `!!document.querySelector('main')` |
-| Has `<article>` | `!!document.querySelector('article')` |
-| Canonical URL | `document.querySelector('link[rel=canonical]')?.href` |
-| Meta robots | `document.querySelector('meta[name=robots]')?.content` |
-| Max-snippet value | `/max-snippet:\s*(-?\d+)/.exec(document.querySelector('meta[name=robots]')?.content\|\|'')?.[1]` |
-| OG title | `document.querySelector('meta[property="og:title"]')?.content` |
-| Title length | `document.title.length` |
-| Images without alt | `document.querySelectorAll('img:not([alt])').length` |
-| External links | `Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname!==location.hostname&&a.hostname).length` |
-| Internal links | `Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname===location.hostname\|\|a.getAttribute('href')?.startsWith('/')).length` |
-| Has About page link | `Array.from(document.querySelectorAll('a[href]')).some(a=>/\/(about\|about-us\|who-we-are)(\/\|$)/i.test(a.pathname))` |
-| Has Contact page link | `Array.from(document.querySelectorAll('a[href]')).some(a=>/\/(contact\|contact-us\|get-in-touch)(\/\|$)/i.test(a.pathname))` |
-| X-Robots-Tag (HTTP) | `curl -sIL "[url]" \| grep -i "x-robots-tag"` |
+| Signal | Command |
+|--------|---------|
+| H1 count | `playwright-cli eval "document.querySelectorAll('h1').length"` |
+| First H1 text | `playwright-cli eval "document.querySelector('h1')?.innerText?.trim()?.substring(0,120)"` |
+| JSON-LD count | `playwright-cli eval "document.querySelectorAll('script[type=\"application/ld+json\"]').length"` |
+| Has `<main>` | `playwright-cli eval "!!document.querySelector('main')"` |
+| Has `<article>` | `playwright-cli eval "!!document.querySelector('article')"` |
+| Canonical URL | `playwright-cli eval "document.querySelector('link[rel=canonical]')?.href"` |
+| Meta robots | `playwright-cli eval "document.querySelector('meta[name=robots]')?.content"` |
+| Max-snippet value | `playwright-cli eval "/max-snippet:\s*(-?\d+)/.exec(document.querySelector('meta[name=robots]')?.content||'')?.[1]"` |
+| OG title | `playwright-cli eval "document.querySelector('meta[property=\"og:title\"]')?.content"` |
+| Title + length | `playwright-cli eval "({t:document.title,l:document.title.length})"` |
+| Images without alt | `playwright-cli eval "document.querySelectorAll('img:not([alt])').length"` |
+| Internal link count | `playwright-cli eval "Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname===location.hostname||a.getAttribute('href')?.startsWith('/')).length"` |
+| External link count | `playwright-cli eval "Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname!==location.hostname&&a.hostname).length"` |
+| Has About link | `playwright-cli eval "Array.from(document.querySelectorAll('a[href]')).some(a=>/\/(about|about-us)(\/|$)/i.test(a.pathname))"` |
+| X-Robots-Tag | `curl -sIL "[url]" \| grep -i "x-robots-tag"` |
 | robots.txt status | `curl -sIL "https://[domain]/robots.txt" \| grep -i "^HTTP/"` |
+| data-nosnippet count | `playwright-cli eval "document.querySelectorAll('[data-nosnippet]').length"` |
