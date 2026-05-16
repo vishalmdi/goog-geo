@@ -18,7 +18,7 @@ In traditional search, you need to appear on page 1. In AI search, a well-struct
 | **Selection signal** | Link graph + keywords | Content quality, structure, extractability |
 | **Rank required?** | Yes | No — a #3 page can be cited over #1 |
 | **Key signals** | Backlinks, PageRank | Semantic HTML, schema, answer blocks, authority |
-| **Crawl bots** | Googlebot | Google-Extended, GPTBot, PerplexityBot, ClaudeBot |
+| **Crawl access** | Googlebot + index/snippet eligibility | Cross-platform AI crawlers tracked separately |
 | **Content format** | Keyword-optimized prose | Self-contained answer blocks, tables, FAQs |
 | **Freshness** | Helps rankings | Critical — undated content loses to dated |
 
@@ -38,7 +38,7 @@ Runs a live browser audit of any URL and produces a **100-point scored GEO repor
 
 | Category | Points | What It Checks |
 |----------|:------:|----------------|
-| **AI Bot Accessibility** | 20 | robots.txt rules for Google-Extended, GPTBot, PerplexityBot, ClaudeBot, and more |
+| **Google Search & AI Bot Access** | 20 | Googlebot, index/snippet eligibility, and cross-platform AI crawler access |
 | **Content Organization** | 20 | Heading hierarchy, FAQ sections, answer blocks, concise paragraphs |
 | **Semantic HTML & Technical** | 20 | `<main>`, `<article>`, title length, canonical, alt text, ARIA, Open Graph |
 | **Content Quality Signals** | 20 | Author attribution, dates, statistics, external citations, answer blocks |
@@ -116,7 +116,7 @@ Audited: 2026-05-16
 ### Score Breakdown
 | Category                   | Score  |
 |----------------------------|-------:|
-| AI Bot Accessibility       | 20/20  |
+| Google Search & AI Bot Access | 20/20 |
 | Content Organization       | 14/20  |
 | Semantic HTML & Technical  | 16/20  |
 | Content Quality Signals    | 12/20  |
@@ -130,12 +130,12 @@ Audited: 2026-05-16
 ### ❌ Failed Checks — Highest Impact First
 | Issue | Category | Impact | Recommended Fix |
 |-------|----------|:------:|----------------|
-| No JSON-LD schema detected | Structured Data | HIGH | Add Organization + FAQPage schema |
+| No JSON-LD schema detected | Structured Data | MEDIUM | Add relevant standard schema.org JSON-LD |
 ...
 
 ### Quick Wins (≤ 30 min)
 1. Fix page title length (currently 12 chars — expand to 50–60)
-2. Add Organization JSON-LD schema block
+2. Add relevant standard schema.org JSON-LD
 ```
 
 ---
@@ -166,7 +166,7 @@ The key insight from the guide is that Google's AI Overviews use the same core r
 1. **Structured, extractable content** — answer blocks, tables, and FAQs that AI can pull as self-contained passages
 2. **Semantic clarity** — semantic HTML (`<main>`, `<article>`, proper heading hierarchy) that helps AI systems identify what the main content actually is
 3. **Entity recognition** — structured data (JSON-LD schema) that tells AI systems exactly what a page is about, who wrote it, and when
-4. **Crawler access** — distinct bots for each AI platform (`Google-Extended`, `GPTBot`, `PerplexityBot`, `ClaudeBot`) that must not be blocked
+4. **Crawler access** — Googlebot/index/snippet eligibility for Google Search AI features, plus cross-platform crawlers like `GPTBot`, `PerplexityBot`, `ClaudeBot`, and `Bingbot`
 
 ### The Princeton GEO Research
 
@@ -195,7 +195,7 @@ The skill uses **`playwright-cli`** (the headless browser CLI bundled with Playw
 ### Scoring Design
 
 The 5-category / 100-point framework was designed to:
-- Weight **AI bot accessibility** and **structured data** heavily, since these are binary blockers (a site blocked in robots.txt or with no schema gets zero for those checks regardless of content quality)
+- Weight **Googlebot access, indexability, and snippet eligibility** heavily, since these can prevent Google from crawling, indexing, or excerpting the page; treat structured data as an entity clarity and rich-results enhancer rather than a hard AI visibility blocker
 - Treat **N/A checks** generously (FAQPage and HowTo schema are auto-awarded if the content type doesn't apply, avoiding penalizing pages for not having content types they don't need)
 - Keep partial scoring possible at every check, since most real-world pages are somewhere in the middle
 
@@ -233,6 +233,15 @@ goog-geo/
 - [Google E-E-A-T Guidelines](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
 - [Schema.org](https://schema.org)
 - [Google Rich Results Test](https://search.google.com/test/rich-results)
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.1.0 | 2026-05-16 | Corrected Google Search AI readiness scoring around Googlebot, indexability, and snippets; added informational bot notes for Google-Extended, Gemini-Bot, Meta-ExternalAgent, Applebot-Extended, and cohere-ai; added robots.txt HTML-body false-positive handling, X-Robots-Tag checks, max-snippet scoring, Top 3 Highest-Impact Fixes, sitemap detection, internal link and trust-page flags, JSON output mode, and preflight fallback warning |
+| 1.0.0 | 2026-05-16 | Initial release |
 
 ---
 

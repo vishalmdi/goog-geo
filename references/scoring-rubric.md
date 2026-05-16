@@ -4,58 +4,88 @@ Detailed per-check criteria for the 5-category, 100-point GEO scoring framework.
 
 ---
 
-## Category 1: AI Bot Accessibility (20 pts)
+## Category 1: Google Search & AI Bot Accessibility (20 pts)
 
 ### How to check robots.txt
 
 ```bash
+# Step 1: Check HTTP status
+curl -sIL "https://[domain]/robots.txt" | grep -i "^HTTP/"
+
+# Step 2: Fetch content
 curl -sL "https://[domain]/robots.txt"
 ```
 
 Look for any `User-agent:` block followed by a `Disallow:` rule that would block the bot from the page being audited. A `Disallow: /` blocks the entire site. A `Disallow: /blog/` would block blog pages but not the homepage.
 
-Also check for a `Crawl-delay` directive — very high delays (> 10s) can effectively prevent AI bots from crawling frequently enough.
+Also grep for these bots:
+- Google Search AI eligibility (scored): `Googlebot`
+- Cross-platform AI access (scored): `GPTBot`, `ChatGPT-User`, `PerplexityBot`, `ClaudeBot`, `anthropic-ai`, `Bingbot`
+- Informational bot controls: `Google-Extended`, `Gemini-Bot`, `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai`
+
+Also check for a `Crawl-delay` directive. Google does not support `Crawl-delay` in robots.txt, so it must not be scored as a Google Search AI issue. Report high delays as informational crawl friction for non-Google bots.
+
+Also check `X-Robots-Tag` HTTP response header from the page URL: `curl -sIL "[page-url]" | grep -i "x-robots-tag"`. If it contains `noindex`, treat it identically to a noindex meta tag.
 
 ### Scoring Rules
 
 **robots.txt accessible (2 pts)**
-- 2 pts: HTTP 200 response
+- 2 pts: HTTP 200 response with plain-text body
 - 1 pt: HTTP 200 but file is empty (technically accessible; no blocks)
-- 0 pts: HTTP 404 or connection error
+- 0 pts: HTTP 404, connection error, OR HTTP 200 but body starts with `<!DOCTYPE` or `<html` (host serving an HTML error page — treat as missing)
 
-**Googlebot not blocked (2 pts)**
-- 2 pts: No `User-agent: Googlebot` + `Disallow` rule covering the target page
-- 1 pt: Googlebot blocked on some sections but not the audited page
+**Crawl-delay note:** If a `Crawl-delay` directive > 10 seconds is found for any non-Google AI bot, report it in the audit output as informational. Do not deduct points.
+
+**Googlebot not blocked (4 pts)** — Google Search AI crawl eligibility
+- 4 pts: No `User-agent: Googlebot` + `Disallow` rule covering the target page
+- 2 pts: Googlebot blocked on some sections but not the audited page
 - 0 pts: `User-agent: Googlebot` / `Disallow: /` or disallow covering the page
-
-**Google-Extended not blocked (4 pts)** — highest weight; controls AI Overviews
-- 4 pts: No `User-agent: Google-Extended` rule at all, OR rule exists with `Allow: /`
-- 2 pts: Google-Extended blocked on some sections but not the audited page
-- 0 pts: `User-agent: Google-Extended` / `Disallow: /` or disallow covering the page
 
 **GPTBot / ChatGPT-User not blocked (3 pts)**
 - 3 pts: Neither `GPTBot` nor `ChatGPT-User` is blocked for the target page
 - 1 pt: One is blocked, the other is not
 - 0 pts: Both blocked covering the target page
 
-**PerplexityBot not blocked (3 pts)**
-- 3 pts: No `User-agent: PerplexityBot` + `Disallow` covering the target page
+**PerplexityBot not blocked (2 pts)**
+- 2 pts: No `User-agent: PerplexityBot` + `Disallow` covering the target page
 - 0 pts: PerplexityBot blocked
 
-**ClaudeBot / anthropic-ai not blocked (3 pts)**
-- 3 pts: Neither `ClaudeBot` nor `anthropic-ai` is blocked
+**ClaudeBot / anthropic-ai not blocked (2 pts)**
+- 2 pts: Neither `ClaudeBot` nor `anthropic-ai` is blocked
 - 1 pt: One is blocked, the other is not
 - 0 pts: Both blocked
 
-**No noindex meta blocking all crawlers (3 pts)**
+**Bingbot not blocked (1 pt)**
+- 1 pt: No `User-agent: Bingbot` + `Disallow` covering the target page
+- 0 pts: Bingbot blocked
 
+**No `noindex` signal (3 pts)**
+
+Check both sources:
+1. Meta tag (via browser):
 ```bash
 playwright-cli eval "document.querySelector('meta[name=robots]')?.content"
 ```
+2. HTTP header (already captured in Step 1):
+```bash
+curl -sIL "[page-url]" | grep -i "x-robots-tag"
+```
 
-- 3 pts: No robots meta tag, OR `content="index,follow"` or similar permissive value
-- 1 pt: `noarchive` or `nosnippet` (degrades AI summaries but doesn't fully block)
-- 0 pts: `noindex` — page will not be indexed by any crawler
+Scoring — use the most restrictive signal found across either source:
+- 3 pts: No robots directives, OR permissive `index,follow`
+- 1 pt: `noarchive` only (cache blocked but indexing is still allowed)
+- 0 pts: `noindex` (from meta tag OR `X-Robots-Tag` header) — page will not be indexed
+
+**No snippet-blocking signal (3 pts)**
+
+Check meta robots, `X-Robots-Tag`, and broad `data-nosnippet` usage around the core answer content.
+- 3 pts: No snippet restrictions, OR `max-snippet:-1` (unlimited snippet length)
+- 2 pts: Narrow `data-nosnippet` appears outside the core answer content
+- 1 pt: `max-snippet` is set to a small positive value that may limit useful excerpts
+- 0 pts: `nosnippet`, `max-snippet:0`, or `data-nosnippet` wraps the core answer content
+
+**Informational bots — no additional points:**
+Check for `Google-Extended`, `Gemini-Bot`, `Meta-ExternalAgent`, `Applebot-Extended`, `cohere-ai` in robots.txt. If any are blocked, report in the Technical Note section of the audit output. Do not deduct points. `Google-Extended` does not control Google Search AI Overview eligibility.
 
 ---
 
@@ -272,6 +302,10 @@ playwright-cli eval "Array.from(document.querySelectorAll('a[href]')).filter(a=>
 - 1 pt: External links only to social profiles
 - 0 pts: No external links at all
 
+**Internal link count — informational (no points):** `internalLinks` is captured in step 3e. If < 3 internal links are found, add a supplemental flag: "Page appears isolated — low internal link count may make related content harder to discover." No points deducted.
+
+**Trust pages — informational (no points):** `hasAbout` and `hasContact` are captured in step 3d. If neither is linked from the audited page, add a supplemental flag: "No About or Contact page detected — users and quality evaluators may have less context about who is behind the site." No points deducted.
+
 **Clear answer block aligned with query intent (4 pts)**
 
 This requires human judgment based on the target queries provided. Read the first 500 words of content:
@@ -362,6 +396,14 @@ If the snapshot shows empty content, the page may require authentication or have
 
 If the page returns a login redirect or CAPTCHA, the audit cannot be completed with playwright-cli. Note this in the report and score Category 1 based on what can be checked (robots.txt, headers) and leave other categories as "N/A — page not publicly accessible."
 
+### Browser Unavailable (playwright-cli cannot be installed)
+
+If playwright-cli installation fails, follow the partial audit path defined in SKILL.md Preflight. Score only what curl and HTTP headers can verify (parts of Category 1 and Category 3 meta tags). Mark Categories 2, 4, and 5 as `N/A — browser unavailable`. Do not estimate schema or DOM results from static source — a partial audit with honest gaps is more useful than a fabricated full audit.
+
+### Sitemap Detection
+
+Sitemap presence is informational — do not add or deduct points. Report in the audit's Technical Note section. A missing sitemap on a site with > 10 pages should be included in the Action Plan as a supplemental recommendation because sitemaps can help crawlers discover canonical content URLs.
+
 ### Dynamic Schema Injection
 
 Some CMS platforms inject schema only on specific page types. If running a homepage audit, check a representative content page (blog post, product page) too, as the homepage often has different schema than content pages.
@@ -385,7 +427,13 @@ playwright-cli eval "Array.from(document.querySelectorAll('link[rel=alternate][h
 | Has `<article>` | `!!document.querySelector('article')` |
 | Canonical URL | `document.querySelector('link[rel=canonical]')?.href` |
 | Meta robots | `document.querySelector('meta[name=robots]')?.content` |
+| Max-snippet value | `/max-snippet:\s*(-?\d+)/.exec(document.querySelector('meta[name=robots]')?.content\|\|'')?.[1]` |
 | OG title | `document.querySelector('meta[property="og:title"]')?.content` |
 | Title length | `document.title.length` |
 | Images without alt | `document.querySelectorAll('img:not([alt])').length` |
 | External links | `Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname!==location.hostname&&a.hostname).length` |
+| Internal links | `Array.from(document.querySelectorAll('a[href]')).filter(a=>a.hostname===location.hostname\|\|a.getAttribute('href')?.startsWith('/')).length` |
+| Has About page link | `Array.from(document.querySelectorAll('a[href]')).some(a=>/\/(about\|about-us\|who-we-are)(\/\|$)/i.test(a.pathname))` |
+| Has Contact page link | `Array.from(document.querySelectorAll('a[href]')).some(a=>/\/(contact\|contact-us\|get-in-touch)(\/\|$)/i.test(a.pathname))` |
+| X-Robots-Tag (HTTP) | `curl -sIL "[url]" \| grep -i "x-robots-tag"` |
+| robots.txt status | `curl -sIL "https://[domain]/robots.txt" \| grep -i "^HTTP/"` |
