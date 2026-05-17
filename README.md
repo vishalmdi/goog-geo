@@ -70,22 +70,9 @@ You do **not** need a paid Claude plan to install this skill. Claude Skills are 
 
 1. Open the [goog-geo GitHub repository](https://github.com/vishalmdi/goog-geo).
 2. Click **Code** → **Download ZIP**.
-3. Unzip the downloaded file.
-4. If the folder is named `goog-geo-main`, rename it to `goog-geo`.
-5. Zip the `goog-geo` folder again so the ZIP contains the folder itself:
-
-   ```text
-   goog-geo.zip
-   └── goog-geo/
-       ├── SKILL.md
-       ├── package.json
-       ├── scripts/
-       └── references/
-   ```
-
-6. In Claude, go to **Customize** → **Skills**.
-7. Click the **+** button, choose **Create skill** → **Upload a skill**, and upload `goog-geo.zip`.
-8. Toggle the skill on.
+3. In Claude, go to **Customize** → **Skills**.
+4. Click the **+** button, choose **Create skill** → **Upload a skill**, and upload the ZIP file you just downloaded from GitHub.
+5. Toggle the skill on.
 
 Your uploaded skill is private to your Claude account unless you are on a Team or Enterprise plan and choose to share it with your organization.
 
