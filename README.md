@@ -60,10 +60,36 @@ Runs a live browser audit of any URL and produces a **100-point scored GEO repor
 
 ### Requirements
 
-- [Claude Code](https://claude.ai/code) (CLI or desktop app)
-- `playwright-cli` available via `npx` (installed automatically if missing)
+- Claude.ai with Skills enabled, or [Claude Code](https://claude.ai/code)
+- Code execution enabled in Claude
+- For Claude Code installs: `playwright-cli` available via `npx` (installed automatically if missing)
 
-### Install the Skill
+### Install in Claude Web UI
+
+You do **not** need a paid Claude plan to install this skill. Claude Skills are available on Free, Pro, Max, Team, and Enterprise plans, but Code execution must be enabled in Claude.
+
+1. Open the [goog-geo GitHub repository](https://github.com/vishalmdi/goog-geo).
+2. Click **Code** → **Download ZIP**.
+3. Unzip the downloaded file.
+4. If the folder is named `goog-geo-main`, rename it to `goog-geo`.
+5. Zip the `goog-geo` folder again so the ZIP contains the folder itself:
+
+   ```text
+   goog-geo.zip
+   └── goog-geo/
+       ├── SKILL.md
+       ├── package.json
+       ├── scripts/
+       └── references/
+   ```
+
+6. In Claude, go to **Customize** → **Skills**.
+7. Click the **+** button, choose **Create skill** → **Upload a skill**, and upload `goog-geo.zip`.
+8. Toggle the skill on.
+
+Your uploaded skill is private to your Claude account unless you are on a Team or Enterprise plan and choose to share it with your organization.
+
+### Install in Claude Code
 
 ```bash
 # 1. Clone the repo into your skills directory
