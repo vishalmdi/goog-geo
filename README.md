@@ -31,6 +31,7 @@ Runs a live browser audit of any URL and produces a **100-point scored GEO repor
 - A letter grade (A–F)
 - Per-category scores across 5 dimensions
 - A pass/fail checklist of 28 specific checks
+- An inspectable evidence bundle for technical checks: final URL, rendered title, crawler rule match, parsed robots directives, JSON-LD summary, and exact action plan
 - A prioritized action plan (quick wins → medium effort → longer term)
 - An explicit list of things **not** to do (common GEO myths debunked by Google)
 
@@ -126,8 +127,17 @@ Claude will then:
 1. Fetch `robots.txt` and HTTP headers
 2. Open the URL in a headless browser
 3. Extract headings, JSON-LD schema, meta tags, semantic HTML, and content signals
-4. Score all 5 categories
-5. Return a full GEO report with action plan
+4. Attach evidence bundles to the key technical checks
+5. Score all 5 categories
+6. Return a full GEO report with action plan
+
+You can also run the deterministic collector directly:
+
+```bash
+npm run audit -- https://yoursite.com/your-page
+```
+
+The collector outputs JSON with raw signals plus a `checks` object. Each check includes `status`, `evidence`, and `actionPlan`, so the score can be reviewed instead of treated as a magic grade.
 
 ### Example Output
 
@@ -230,6 +240,14 @@ The skill uses **`playwright-cli`** (the headless browser CLI bundled with Playw
 
 For automated data collection, the skill also ships `scripts/audit.mjs` — a deterministic Node.js script using the Playwright Node API that collects all DOM signals in a single browser session and outputs JSON. Claude then interprets the JSON and applies the scoring rubric.
 
+The collector includes inspectable evidence for the highest-risk checks:
+
+- **Googlebot access** — audited path, matched robots.txt user-agent, matched rule, and allow/block result
+- **Rendered page state** — requested URL, final browser URL, navigation status, and rendered title
+- **Index/snippet controls** — parsed meta robots and `X-Robots-Tag` directives, including `noindex`, `nosnippet`, and `max-snippet`
+- **Canonical URL** — rendered canonical and whether it matches the final browser URL
+- **JSON-LD** — rendered JSON-LD count, validity, and schema types
+
 ### Scoring Design
 
 The 5-category / 100-point framework (25/25/20/15/15) was designed to:
@@ -283,6 +301,7 @@ goog-geo/
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1.0 | 2026-05-18 | Added inspectable evidence bundles to the deterministic collector; improved robots.txt parsing with URL-specific rules, user-agent specificity, longest-match precedence, and matched-rule evidence; added final rendered URL, parsed robots directives, JSON-LD summaries, canonical matching, `npm run audit`, and unit tests for parsing logic |
 | 2.0.0 | 2026-05-16 | Repositioned as Google AI Search readiness auditor; corrected factual error (Google-Extended does not gate AI Overviews — Googlebot + noindex/nosnippet do); new 25/25/20/15/15 scoring model reflecting actual Google AI eligibility hierarchy; Category 2 adds qualitative helpful-content judgment; Category 3 adds query fan-out coverage; new `scripts/audit.mjs` for deterministic data collection; new `references/google-ai-search-principles.md` as truth source; eligibility verdict added to report header (ELIGIBLE / AT RISK / BLOCKED / UNKNOWN); schema reframed as enhancement signal, not requirement |
 | 1.1.0 | 2026-05-16 | Corrected Google Search AI readiness scoring around Googlebot, indexability, and snippets; added informational bot notes for Google-Extended, Gemini-Bot, Meta-ExternalAgent, Applebot-Extended, and cohere-ai; added robots.txt HTML-body false-positive handling, X-Robots-Tag checks, max-snippet scoring, Top 3 Highest-Impact Fixes, sitemap detection, internal link and trust-page flags, JSON output mode, and preflight fallback warning |
 | 1.0.0 | 2026-05-16 | Initial release |
