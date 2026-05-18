@@ -1,9 +1,11 @@
 {
   "name": "goog-geo",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "description": "GEO audit skill for Claude Code — Google AI Search readiness",
   "scripts": {
+    "audit": "node scripts/audit.mjs",
+    "test": "node --test scripts/*.test.mjs",
     "install-browser": "npx playwright install chromium --with-deps"
   },
   "dependencies": {

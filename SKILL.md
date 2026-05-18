@@ -2,7 +2,7 @@
 name: goog-geo
 description: "Audits any website URL for Google AI Search readiness based on Google's official AI optimization guide. Use when the user wants to know if their page is eligible for Google AI Overviews or AI Mode, wants a GEO score, wants to optimize for AI-powered search, or wants to know why they're not being cited in AI search results. Scans the live URL using playwright-cli (auto-installs if needed). Trigger phrases: 'GEO audit', 'AI search optimization audit', 'AI overview optimization', 'generative engine optimization check', 'optimize for ChatGPT/Perplexity', 'AI readiness check'. For content strategy to act on audit results, see ai-seo. For traditional technical SEO, see seo-audit. For implementing schema markup fixes, see schema-markup."
 metadata:
-  version: 2.0.0
+  version: 2.1.0
 ---
 
 # Google AI Search Readiness Audit
@@ -341,6 +341,17 @@ Audited: [YYYY-MM-DD]
 | Content is generic / commodity | Helpful Content | HIGH | Add first-hand examples, specific data, or expert opinion that a generic summary cannot replicate |
 | ...   | ...      | ...    | ...            |
 
+### Evidence Bundle
+Every scored technical check should include concise receipts so the audit is reviewable:
+
+| Check | Status | Evidence | Action Plan |
+|-------|--------|----------|-------------|
+| Googlebot access | pass/fail/unknown | robots URL, audited path, matched user-agent, matched Allow/Disallow rule | Exact robots.txt change or "no action needed" |
+| Rendered page | pass/review | requested URL, final URL, HTTP status, rendered title | Fix redirect/auth/consent issue if page differs |
+| Indexing allowed | pass/fail | meta robots + X-Robots-Tag parsed directives | Remove `noindex` if accidental |
+| Snippets allowed | pass/fail | `nosnippet`, `max-snippet`, and `data-nosnippet` state | Remove snippet blockers from core content |
+| JSON-LD | pass/review | rendered JSON-LD count, valid blocks, schema types | Add or fix standard schema.org JSON-LD |
+
 **Supplemental flags (informational — not scored):**
 - If `internalLinks < 3`: flag `Thin internal link structure — add contextual links to related pages`
 - If `hasAbout` and `hasContact` both false: flag `No About or Contact page detected — add visible company/contact information`
@@ -410,8 +421,39 @@ Audited: [YYYY-MM-DD]
     "missing": []
   },
   "failed_checks": [
-    { "issue": "...", "category": "...", "impact": "HIGH", "fix": "..." }
+    {
+      "issue": "...",
+      "category": "...",
+      "impact": "HIGH",
+      "fix": "...",
+      "evidence": {
+        "source": "robots.txt / rendered_chromium_dom / http_headers",
+        "final_url": "https://...",
+        "rendered_title": "...",
+        "dom_nodes": [],
+        "json_ld_types": [],
+        "crawler_access": "allowed / blocked / unknown",
+        "matched_rule": null
+      }
+    }
   ],
+  "evidence_bundle": {
+    "requested_url": "https://...",
+    "final_url": "https://...",
+    "rendered_title": "...",
+    "checks": {
+      "googlebot_access": {
+        "status": "pass",
+        "evidence": {},
+        "action_plan": "..."
+      },
+      "indexing_allowed": {
+        "status": "pass",
+        "evidence": {},
+        "action_plan": "..."
+      }
+    }
+  },
   "technical_notes": {
     "sitemap": "found at https://... / not detected",
     "about_page": "linked / not found",
